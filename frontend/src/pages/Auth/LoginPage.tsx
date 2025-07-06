@@ -30,6 +30,7 @@ const LoginPage: React.FC = () => {
       }
     },
     onError: (apolloError) => {
+      // TODO: Replace with toast notification - e.g., toast.error(apolloError.message || t('login.failed'));
       setError(apolloError.message || t('login.failed'));
     }
   });

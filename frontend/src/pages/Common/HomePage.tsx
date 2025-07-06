@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react'; // Added useState, useEffect
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@apollo/client';
+import { useQuery, useLazyQuery } from '@apollo/client'; // Added useLazyQuery
 import { Link } from 'react-router-dom';
-import { GET_ALL_COURSES, GET_ALL_CATEGORIES } from '../../graphql/queries'; // Assuming GET_ALL_COURSES fetches published by default
+import { GET_ALL_CATEGORIES } from '../../graphql/queries'; // GET_ALL_COURSES will be replaced
+import { GET_ALL_COURSES_WITH_FILTERS } from '../../graphql/courseSearchQueries'; // New query
 
 // Define a simple Course interface for type safety
 interface Course {
@@ -33,12 +34,97 @@ interface Category {
 }
 
 
+// Client-side Enums (mirroring backend, ideally from codegen)
+enum CourseLevel {
+  BEGINNER = "BEGINNER",
+  INTERMEDIATE = "INTERMEDIATE",
+  ADVANCED = "ADVANCED",
+  ALL_LEVELS = "ALL_LEVELS",
+}
+
+enum CourseSortBy {
+  NEWEST = "NEWEST",
+  POPULARITY = "POPULARITY",
+  HIGHEST_RATED = "HIGHEST_RATED",
+}
+
+interface Filters {
+  searchQuery: string;
+  categoryIds: string[];
+  levels: CourseLevel[];
+  priceMin?: number;
+  priceMax?: number;
+  languages: string[];
+  sortBy: CourseSortBy;
+}
+
 const HomePage: React.FC = () => {
   const { t } = useTranslation();
-  const { loading: loadingCourses, error: errorCourses, data: dataCourses } = useQuery(GET_ALL_COURSES, {
-    variables: { publishedOnly: true } // Ensure we fetch only published courses
+  const [filters, setFilters] = useState<Filters>({
+    searchQuery: '',
+    categoryIds: [],
+    levels: [],
+    languages: [],
+    sortBy: CourseSortBy.NEWEST,
+    // priceMin and priceMax initially undefined
   });
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+  // Use useLazyQuery for courses to trigger on filter change
+  const [loadCourses, { loading: loadingCourses, error: errorCourses, data: dataCourses }] = useLazyQuery(GET_ALL_COURSES_WITH_FILTERS);
+
   const { loading: loadingCategories, error: errorCategories, data: dataCategories } = useQuery(GET_ALL_CATEGORIES);
+
+  // Debounce search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(filters.searchQuery);
+    }, 500); // 500ms delay
+    return () => clearTimeout(handler);
+  }, [filters.searchQuery]);
+
+  // Fetch courses when filters change (including debounced search)
+  useEffect(() => {
+    loadCourses({
+      variables: {
+        publishedOnly: true,
+        searchQuery: debouncedSearchQuery || null, // Send null if empty
+        categoryIds: filters.categoryIds.length > 0 ? filters.categoryIds : null,
+        levels: filters.levels.length > 0 ? filters.levels : null,
+        priceMin: filters.priceMin,
+        priceMax: filters.priceMax,
+        languages: filters.languages.length > 0 ? filters.languages : null,
+        sortBy: filters.sortBy,
+      }
+    });
+  }, [debouncedSearchQuery, filters.categoryIds, filters.levels, filters.priceMin, filters.priceMax, filters.languages, filters.sortBy, loadCourses]);
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+
+    if (type === 'checkbox') {
+      const { checked } = e.target as HTMLInputElement;
+      setFilters(prev => {
+        const currentValues = prev[name as keyof Filters] as string[] || [];
+        if (checked) {
+          return { ...prev, [name]: [...currentValues, value] };
+        } else {
+          return { ...prev, [name]: currentValues.filter(item => item !== value) };
+        }
+      });
+    } else if (name === "priceMin" || name === "priceMax") {
+        setFilters(prev => ({ ...prev, [name]: value === '' ? undefined : parseFloat(value) }));
+    }
+     else {
+      setFilters(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  // Example for multi-select category (can be improved with a proper multi-select component)
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+    setFilters(prev => ({ ...prev, categoryIds: selectedOptions }));
+  };
 
 
   // Basic card style
@@ -102,12 +188,73 @@ const HomePage: React.FC = () => {
   const categories: Category[] = dataCategories?.getAllCategories || [];
 
   return (
-    // MUI: <Container maxWidth="lg">
+    // MUI: <Container maxWidth="lg" sx={{ py: 3 }}>
     <div>
       {/* MUI: <Typography variant="h3" component="h1" gutterBottom textAlign="center">{t('homePage.title', 'به سامانه مدیریت یادگیری خوش آمدید')}</Typography> */}
       <h1>{t('homePage.title', 'به سامانه مدیریت یادگیری خوش آمدید')}</h1>
       {/* MUI: <Typography variant="subtitle1" textAlign="center" color="text.secondary" paragraph>{t('homePage.description', '...')}</Typography> */}
       <p>{t('homePage.description', 'دوره های متنوعی را در اینجا پیدا کنید و یادگیری خود را شروع کنید.')}</p>
+
+      {/* MUI: <Paper elevation={2} sx={{ p: 2, my: 3 }}> <Grid container spacing={2} alignItems="center"> ... filter inputs ... </Grid> </Paper> */}
+      <div style={{ padding: '20px', margin: '20px 0', border: '1px solid #eee', borderRadius: '8px', background: '#f9f9f9' }}>
+        <h3 style={{marginTop: 0}}>{t('filters.title', 'جستجو و فیلتر دوره‌ها')}</h3>
+        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px'}}>
+          {/* MUI: <TextField label={t('filters.searchQuery', 'جستجو...')} name="searchQuery" value={filters.searchQuery} onChange={handleFilterChange} variant="outlined" size="small" fullWidth /> */}
+          <div>
+            <label htmlFor="searchQuery" style={{display: 'block', marginBottom: '5px'}}>{t('filters.searchQuery', 'جستجو در عنوان/توضیحات')}:</label>
+            <input type="text" id="searchQuery" name="searchQuery" value={filters.searchQuery} onChange={handleFilterChange} placeholder={t('filters.searchPlaceholder', 'مثلا: رياكت پيشرفته')} style={{width: 'calc(100% - 16px)', padding: '8px'}}/>
+          </div>
+
+          {/* MUI: <FormControl fullWidth size="small"><InputLabel>{t('filters.category', 'دسته بندی')}</InputLabel><Select multiple name="categoryIds" value={filters.categoryIds} onChange={handleCategoryChange} renderValue={(selected) => categories.filter(c=>selected.includes(c.id)).map(c=>c.name).join(', ')}>{categories.map...}</Select></FormControl> */}
+          <div>
+            <label htmlFor="categoryIds" style={{display: 'block', marginBottom: '5px'}}>{t('filters.category', 'دسته بندی (چند انتخاب با Ctrl/Cmd)')}:</label>
+            <select id="categoryIds" name="categoryIds" multiple value={filters.categoryIds} onChange={handleCategoryChange} style={{width: '100%', minHeight: '60px', padding: '8px'}}>
+              {loadingCategories ? <option disabled>{t('loading', '...')}</option> : categories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* MUI: <FormControl fullWidth size="small"><InputLabel>{t('filters.level', 'سطح')}</InputLabel><Select multiple name="levels" value={filters.levels} onChange={(e) => setFilters(prev => ({...prev, levels: e.target.value as CourseLevel[]}))} renderValue={(selected) => selected.join(', ')}>{Object.values(CourseLevel).map...}</Select></FormControl> */}
+          <div>
+            <label style={{display: 'block', marginBottom: '5px'}}>{t('filters.level', 'سطح دوره')}:</label>
+            {Object.values(CourseLevel).filter(level => level !== CourseLevel.ALL_LEVELS).map(level => (
+              <label key={level} style={{marginRight: '10px', display: 'inline-block'}}>
+                <input type="checkbox" name="levels" value={level} checked={filters.levels.includes(level)} onChange={handleFilterChange} />
+                {t(`courseLevels.${level}`, level)}
+              </label>
+            ))}
+          </div>
+
+          {/* MUI for price: Could use two TextFields for min/max or a RangeSlider */}
+          <div style={{display: 'flex', gap: '10px'}}>
+            <div>
+              <label htmlFor="priceMin" style={{display: 'block', marginBottom: '5px'}}>{t('filters.priceMin', 'حداقل قیمت')}:</label>
+              <input type="number" id="priceMin" name="priceMin" value={filters.priceMin ?? ''} onChange={handleFilterChange} placeholder="0" style={{width: '80px', padding: '8px'}} />
+            </div>
+            <div>
+              <label htmlFor="priceMax" style={{display: 'block', marginBottom: '5px'}}>{t('filters.priceMax', 'حداکثر قیمت (0 برای رایگان)')}:</label>
+              <input type="number" id="priceMax" name="priceMax" value={filters.priceMax ?? ''} onChange={handleFilterChange} placeholder="1000000" style={{width: '80px', padding: '8px'}} />
+            </div>
+          </div>
+
+          {/* MUI: <TextField label={t('filters.language', 'زبان (مثلا: فارسی, انگلیسی)')} name="languages" value={filters.languages.join(',')} onChange={(e)=>setFilters(prev=>({...prev, languages: e.target.value.split(',').map(l=>l.trim()).filter(l=>l)}))} helperText={t('filters.commaSeparated', 'با ویرگول جدا کنید')} variant="outlined" size="small" fullWidth /> */}
+           <div>
+            <label htmlFor="languages" style={{display: 'block', marginBottom: '5px'}}>{t('filters.language', 'زبان')}:</label>
+            <input type="text" id="languages" name="languages" value={filters.languages.join(',')} onChange={(e)=>setFilters(prev=>({...prev, languages: e.target.value.split(',').map(l=>l.trim()).filter(l=>l)}))} placeholder={t('filters.languagePlaceholder', 'فارسی, انگلیسی')} style={{width: 'calc(100% - 16px)', padding: '8px'}}/>
+          </div>
+
+          {/* MUI: <FormControl fullWidth size="small"><InputLabel>{t('filters.sortBy', 'مرتب سازی بر اساس')}</InputLabel><Select name="sortBy" value={filters.sortBy} onChange={handleFilterChange}>{Object.values(CourseSortBy).map...}</Select></FormControl> */}
+          <div>
+            <label htmlFor="sortBy" style={{display: 'block', marginBottom: '5px'}}>{t('filters.sortBy', 'مرتب سازی بر اساس')}:</label>
+            <select id="sortBy" name="sortBy" value={filters.sortBy} onChange={handleFilterChange} style={{width: '100%', padding: '8px'}}>
+              {Object.values(CourseSortBy).map(sort => (
+                <option key={sort} value={sort}>{t(`courseSortBy.${sort}`, sort)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       {/* MUI: <Box component="section" sx={{ my: 4 }}> */}
       <section style={{ margin: '30px 0' }}>

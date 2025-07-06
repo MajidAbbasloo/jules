@@ -45,6 +45,13 @@ enum UserRole {
   ADMIN
 }
 
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  ALL_LEVELS // Could also be a default or handled by not filtering
+}
+
 model Question {
   id        String   @id @default(cuid())
   title     String?  // Optional title for the question
@@ -82,6 +89,8 @@ model Course {
   price         Float?    @default(0)
   thumbnailUrl  String?
   tags          String[]  // List of tags or keywords
+  level         CourseLevel? // New field for course level
+  language      String?   // New field for course language (e.g., "فارسی", "English")
   isPublished   Boolean   @default(false)
   instructorId  String
   instructor    User      @relation(fields: [instructorId], references: [id])
@@ -95,6 +104,8 @@ model Course {
 
   @@index([instructorId])
   @@index([categoryId])
+  @@index([level])
+  @@index([language])
 }
 
 model Section {

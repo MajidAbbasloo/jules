@@ -63,21 +63,29 @@ const CourseManagementTab: React.FC = () => {
   );
 
   const [adminSetCoursePublication, { loading: publishingLoading }] = useMutation(ADMIN_SET_COURSE_PUBLICATION_MUTATION, {
-    onError: (err) => setMutationError(err.message || t('courseManagement.publishErrorGeneric', 'خطا در تغییر وضعیت انتشار.')),
-    onCompleted: () => { setMutationError(null); refetch(); }
+    onError: (err) => {
+      // TODO: Replace with toast notification - e.g., toast.error(err.message || t(...));
+      setMutationError(err.message || t('courseManagement.publishErrorGeneric', 'خطا در تغییر وضعیت انتشار.'));
+    },
+    onCompleted: () => {
+      setMutationError(null);
+      refetch();
+      // TODO: Replace with toast notification - e.g., toast.success('Course publication status updated!');
+    }
   });
 
   const [deleteCourse, { loading: deletingLoading }] = useMutation(DELETE_COURSE_MUTATION, {
-    onError: (err) => setMutationError(err.message || t('courseManagement.deleteErrorGeneric', 'خطا در حذف دوره.')),
+    onError: (err) => {
+      // TODO: Replace with toast notification - e.g., toast.error(err.message || t(...));
+      setMutationError(err.message || t('courseManagement.deleteErrorGeneric', 'خطا در حذف دوره.'));
+    },
     onCompleted: (deletedData) => {
         setMutationError(null);
-        // Optionally, update cache manually here if refetch is too slow or not desired
-        // For now, refetch is simpler.
-        refetch();
+        refetch(); // Refetch is generally fine here, or use cache update below.
+        // TODO: Replace alert with toast notification - e.g., toast.success(t('courseManagement.deleteSuccess'));
         alert(t('courseManagement.deleteSuccess', 'دوره با موفقیت حذف شد.'));
     },
     update: (cache, { data: { deleteCourse: deletedCourse } }) => {
-        // Manual cache update to remove the deleted course from the list
         if (deletedCourse) {
             const existingCoursesQuery = cache.readQuery<{ getAllCoursesForAdmin: CourseForAdmin[] }>({
                 query: GET_ALL_COURSES_FOR_ADMIN_VIEW,

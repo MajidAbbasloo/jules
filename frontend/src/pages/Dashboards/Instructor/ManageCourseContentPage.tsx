@@ -177,7 +177,9 @@ const ManageCourseContentPage: React.FC = () => {
       }
       refetchCourse();
       handleCloseSectionModal();
+       // TODO: Replace with toast notification - e.g., toast.success('Section saved!');
     } catch (err: any) {
++      // TODO: Replace with toast notification - e.g., toast.error(t('manageContent.sectionSaveError', ...) + err.message);
       alert(t('manageContent.sectionSaveError', 'خطا در ذخیره سرفصل: ') + err.message);
     }
   };
@@ -194,40 +196,48 @@ const ManageCourseContentPage: React.FC = () => {
         order: Number(currentLesson.order),
         isPreviewable: currentLesson.isPreviewable || false,
         sectionId: editingSectionIdForLesson,
-        resources: currentLesson.resources // Assuming resources is handled as JSON string or object
+        resources: currentLesson.resources
     };
 
     try {
-      if (currentLesson.id) { // Update
+      if (currentLesson.id) {
         await updateLesson({ variables: { id: currentLesson.id, ...lessonData } });
-      } else { // Create
+      } else {
         await createLesson({ variables: lessonData });
       }
       refetchCourse();
       handleCloseLessonModal();
+      // TODO: Replace with toast notification - e.g., toast.success('Lesson saved!');
     } catch (err: any) {
+      // TODO: Replace with toast notification - e.g., toast.error(t('manageContent.lessonSaveError', ...) + err.message);
       alert(t('manageContent.lessonSaveError', 'خطا در ذخیره درس: ') + err.message);
     }
   };
 
   // Delete Handlers
   const handleDeleteSection = async (sectionId: string) => {
+    // TODO: Replace window.confirm with a custom modal or MUI Dialog
     if (window.confirm(t('manageContent.confirmDeleteSection', 'آیا از حذف این سرفصل و تمام درسهای آن مطمئن هستید؟'))) {
       try {
         await deleteSection({ variables: { id: sectionId }});
         refetchCourse();
+        // TODO: Replace with toast notification - e.g., toast.success('Section deleted!');
       } catch (err: any) {
+        // TODO: Replace with toast notification - e.g., toast.error(t('manageContent.sectionDeleteError', ...) + err.message);
         alert(t('manageContent.sectionDeleteError', 'خطا در حذف سرفصل: ') + err.message);
       }
     }
   };
 
   const handleDeleteLesson = async (lessonId: string) => {
+    // TODO: Replace window.confirm with a custom modal or MUI Dialog
     if (window.confirm(t('manageContent.confirmDeleteLesson', 'آیا از حذف این درس مطمئن هستید؟'))) {
       try {
         await deleteLesson({ variables: { id: lessonId }});
         refetchCourse();
+        // TODO: Replace with toast notification - e.g., toast.success('Lesson deleted!');
       } catch (err: any) {
+        // TODO: Replace with toast notification - e.g., toast.error(t('manageContent.lessonDeleteError', ...) + err.message);
         alert(t('manageContent.lessonDeleteError', 'خطا در حذف درس: ') + err.message);
       }
     }

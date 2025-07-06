@@ -32,6 +32,7 @@ const SignupPage: React.FC = () => {
       navigate('/dashboard/student'); // Or a more appropriate page like /verify-email
     },
     onError: (apolloError) => {
+      // TODO: Replace with toast notification - e.g., toast.error(apolloError.message || t('signup.failed'));
       setError(apolloError.message || t('signup.failed'));
     }
   });

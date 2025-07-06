@@ -118,12 +118,15 @@ const CategoryManagementTab: React.FC = () => {
       }
       refetch();
       handleCloseModal();
+       // TODO: Replace with toast notification - e.g., toast.success('Category saved!');
     } catch (err: any) {
++      // TODO: Replace with toast notification - e.g., toast.error(err.message || t(...));
       setMutationError(err.message || t('categoryManagement.error.saveGeneric', 'خطا در ذخیره دسته‌بندی.'));
     }
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
++    // TODO: Replace window.confirm with a custom modal or MUI Dialog
     if (window.confirm(t('categoryManagement.confirmDelete', 'آیا از حذف این دسته‌بندی مطمئن هستید؟'))) {
       setMutationError(null);
       try {
@@ -134,8 +137,10 @@ const CategoryManagementTab: React.FC = () => {
             cache.gc();
           }
         });
-        refetch(); // Or update state manually
+        refetch();
+        // TODO: Replace with toast notification - e.g., toast.success('Category deleted!');
       } catch (err: any) {
++        // TODO: Replace with toast notification - e.g., toast.error(err.message || t(...));
         setMutationError(err.message || t('categoryManagement.error.deleteGeneric', 'خطا در حذف دسته‌بندی.'));
       }
     }

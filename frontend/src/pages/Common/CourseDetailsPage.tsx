@@ -91,11 +91,12 @@ const CourseDetailsPage: React.FC = () => {
     onCompleted: () => {
       setIsUserEnrolled(true);
       setEnrollmentError(null);
+      // TODO: Replace alert with toast notification - e.g., toast.success(t('courseDetails.enrollSuccess'));
       alert(t('courseDetails.enrollSuccess', 'شما با موفقیت در دوره ثبت نام شدید!'));
-      refetchIsEnrolled(); // Re-check enrollment status
-      // Optionally, refetch enrolled courses list if it's cached and displayed elsewhere immediately
+      refetchIsEnrolled();
     },
     onError: (error) => {
+      // TODO: Replace with toast notification - e.g., toast.error(error.message || t('courseDetails.enrollError'));
       setEnrollmentError(error.message || t('courseDetails.enrollError', 'خطا در ثبت نام. لطفاً دوباره تلاش کنید.'));
     }
   });
@@ -109,15 +110,16 @@ const CourseDetailsPage: React.FC = () => {
   // Mutation for submitting a review
   const [submitReview, { loading: reviewSubmitting }] = useMutation(SUBMIT_REVIEW_MUTATION, {
     onCompleted: () => {
+      // TODO: Replace alert with toast notification - e.g., toast.success(t('reviews.submitSuccess'));
       alert(t('reviews.submitSuccess', 'نظر شما با موفقیت ثبت شد.'));
       setShowReviewForm(false);
       setReviewRating(0);
       setReviewComment('');
       setReviewError(null);
       refetchReviews();
-      // Potentially refetch course data if average rating is part of it and calculated on backend
     },
     onError: (error) => {
+      // TODO: Replace with toast notification - e.g., toast.error(error.message || t('reviews.submitErrorGeneric'));
       setReviewError(error.message || t('reviews.submitErrorGeneric', 'خطا در ارسال نظر.'));
     }
   });

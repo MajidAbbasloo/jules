@@ -46,6 +46,8 @@ export const typeDefs = gql`
     price: Float
     thumbnailUrl: String
     tags: [String!]
+    level: CourseLevel
+    language: String
     isPublished: Boolean!
     instructor: User! # The instructor of the course
     sections: [Section!] # Sections within the course
@@ -54,7 +56,16 @@ export const typeDefs = gql`
     category: Category
     createdAt: DateTime!
     updatedAt: DateTime!
+    # Add _count for enrollments and averageRating for sorting
+    _count: CourseCounts
+    averageRating: Float
   }
+
+  type CourseCounts {
+    enrollments: Int
+    lessons: Int # Example, if needed
+  }
+
 
   type Section {
     id: ID!
@@ -181,9 +192,18 @@ export const typeDefs = gql`
 
     # Course
     getCourseById(id: ID!): Course
-    getAllCourses(publishedOnly: Boolean = true): [Course!]
-    getCoursesByCategory(categoryId: ID!, publishedOnly: Boolean = true): [Course!]
-    # TODO: Add searchCourses, getCoursesByInstructor, etc.
+    getAllCourses( # Renaming to searchCourses or keeping as getAllCourses with more filters
+        publishedOnly: Boolean = true
+        searchQuery: String
+        categoryIds: [ID!]
+        levels: [CourseLevel!]
+        priceMin: Float
+        priceMax: Float
+        languages: [String!]
+        sortBy: CourseSortBy
+        # TODO: Add pagination (skip, take)
+    ): [Course!]
+    getCoursesByCategory(categoryId: ID!, publishedOnly: Boolean = true): [Course!] # Keep for specific category pages if simpler
 
     # Category
     getAllCategories: [Category!]
@@ -247,6 +267,21 @@ export const typeDefs = gql`
     getQuestionsForLesson(lessonId: ID!): [Question!]
   }
 
+  enum CourseLevel {
+    BEGINNER
+    INTERMEDIATE
+    ADVANCED
+    ALL_LEVELS
+  }
+
+  enum CourseSortBy {
+    NEWEST
+    POPULARITY # by enrollments count
+    HIGHEST_RATED
+    # TITLE_ASC
+    # TITLE_DESC
+  }
+
   type Question {
     id: ID!
     title: String
@@ -297,5 +332,15 @@ export const typeDefs = gql`
 
     # Progress Tracking
     toggleLessonCompleted(lessonId: ID!, courseId: ID!, completed: Boolean!): Enrollment!
+
+    # User Profile
+    updateUserProfile(input: UpdateUserProfileInput!): Profile!
+  }
+
+  input UpdateUserProfileInput {
+    firstName: String
+    lastName: String
+    bio: String
+    avatarUrl: String # Can be a mock URL from getMockUploadUrl
   }
 `;

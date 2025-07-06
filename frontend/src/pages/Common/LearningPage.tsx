@@ -101,16 +101,16 @@ const LearningPage: React.FC = () => {
 
   const [toggleLessonCompleted, { loading: togglingLessonCompletion }] = useMutation(TOGGLE_LESSON_COMPLETED_MUTATION, {
     onCompleted: (data) => {
-        // Update local state for enrollmentDetails to reflect changes immediately
         if (data?.toggleLessonCompleted) {
             setEnrollmentDetails({
                 progress: data.toggleLessonCompleted.progress,
                 completedLessons: data.toggleLessonCompleted.completedLessons || []
             });
+            // TODO: Replace with toast notification - e.g., toast.success('Lesson status updated!');
         }
-        // refetchEnrollmentDetails(); // Or update cache manually for better UX
     },
     onError: (error) => {
+        // TODO: Replace with toast notification - e.g., toast.error(t('learningPage.errorMarkingLesson', ...) + error.message);
         alert(t('learningPage.errorMarkingLesson', 'خطا در بروزرسانی وضعیت درس: ') + error.message);
     }
 });
@@ -118,7 +118,6 @@ const LearningPage: React.FC = () => {
 
   useEffect(() => {
     if (courseData?.getCourseById && courseData.getCourseById.sections.length > 0 && courseData.getCourseById.sections[0].lessons.length > 0) {
-      // Auto-select the first lesson of the first section initially if user can view it
       const firstLesson = courseData.getCourseById.sections[0].lessons[0];
       if(isUserActuallyEnrolled || firstLesson.isPreviewable) {
         setSelectedLesson(firstLesson);
@@ -127,8 +126,8 @@ const LearningPage: React.FC = () => {
   }, [courseData, isUserActuallyEnrolled]);
 
   useEffect(() => {
-    // Redirect if enrollment check fails for a student
     if (!authLoading && !checkingEnrollment && isAuthenticated && user?.role === 'STUDENT' && isUserActuallyEnrolled === false) {
+        // TODO: Replace with toast notification - e.g., toast.error(t('learningPage.notEnrolled'));
         alert(t('learningPage.notEnrolled', 'شما در این دوره ثبت نام نکرده اید یا دسترسی ندارید.'));
         navigate(`/course/${courseId}`);
     }
@@ -203,8 +202,12 @@ const LearningPage: React.FC = () => {
       setNewQuestionContent('');
       setNewQuestionTitle('');
       refetchQuestions();
+      // TODO: Replace with toast notification - e.g., toast.success('Question submitted!');
     },
-    onError: (err) => alert(t('qna.errorAsking', 'خطا در ارسال سوال: ') + err.message)
+    onError: (err) => {
+      // TODO: Replace with toast notification - e.g., toast.error(t('qna.errorAsking', ...) + err.message);
+      alert(t('qna.errorAsking', 'خطا در ارسال سوال: ') + err.message);
+    }
   });
 
   const [postAnswer, { loading: postingAnswer }] = useMutation(POST_ANSWER_MUTATION, {
@@ -212,8 +215,12 @@ const LearningPage: React.FC = () => {
       setNewAnswerContent('');
       setReplyingToQuestionId(null);
       refetchQuestions();
+      // TODO: Replace with toast notification - e.g., toast.success('Answer posted!');
     },
-    onError: (err) => alert(t('qna.errorAnswering', 'خطا در ارسال پاسخ: ') + err.message)
+    onError: (err) => {
+      // TODO: Replace with toast notification - e.g., toast.error(t('qna.errorAnswering', ...) + err.message);
+      alert(t('qna.errorAnswering', 'خطا در ارسال پاسخ: ') + err.message);
+    }
   });
 
   const handleAskQuestionSubmit = (e: React.FormEvent) => {

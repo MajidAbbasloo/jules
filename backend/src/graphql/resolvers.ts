@@ -92,16 +92,93 @@ export const resolvers = {
         },
       });
     },
-    getAllCourses: async (_parent: any, { publishedOnly = true }: { publishedOnly?: boolean }, context: Context) => {
+    getAllCourses: async (
+        _parent: any,
+        {
+            publishedOnly = true, // Default to true for public queries
+            searchQuery,
+            categoryIds,
+            levels,
+            priceMin,
+            priceMax,
+            languages,
+            sortBy
+        }: {
+            publishedOnly?: boolean,
+            searchQuery?: string,
+            categoryIds?: string[],
+            levels?: CourseLevel[],
+            priceMin?: number,
+            priceMax?: number,
+            languages?: string[],
+            sortBy?: string // Corresponds to CourseSortBy enum
+        },
+        context: Context
+    ) => {
+      let where: Prisma.CourseWhereInput = publishedOnly ? { isPublished: true } : {};
+      const orderBy: Prisma.CourseOrderByWithRelationInput[] = [];
+
+      if (searchQuery) {
+        where.OR = [
+          { title: { contains: searchQuery, mode: 'insensitive' } },
+          { description: { contains: searchQuery, mode: 'insensitive' } },
+        ];
+      }
+      if (categoryIds && categoryIds.length > 0) {
+        where.categoryId = { in: categoryIds };
+      }
+      if (levels && levels.length > 0) {
+        // @ts-ignore // Prisma enum type vs GraphQL enum type might differ slightly
+        where.level = { in: levels.filter(l => l !== 'ALL_LEVELS') }; // Filter out ALL_LEVELS if present
+      }
+      if (languages && languages.length > 0) {
+        where.language = { in: languages };
+      }
+      if (priceMin !== undefined) {
+        where.price = { ...where.price as Prisma.FloatFilter, gte: priceMin };
+      }
+      if (priceMax !== undefined) {
+         if (priceMax === 0) { // Special case for free courses
+            where.price = { equals: 0 };
+        } else {
+            where.price = { ...where.price as Prisma.FloatFilter, lte: priceMax };
+        }
+      }
+
+      // Sorting logic
+      switch (sortBy) {
+        case 'NEWEST':
+          orderBy.push({ createdAt: 'desc' });
+          break;
+        case 'POPULARITY': // Requires sorting by enrollments count
+          orderBy.push({ enrollments: { _count: 'desc' } });
+          break;
+        case 'HIGHEST_RATED': // Requires sorting by average rating (complex, see Course type resolver)
+           // This is more complex and typically done via a derived field or a view if DB doesn't support direct sort on aggregate.
+           // For now, we'll sort by createdAt as a fallback if this is chosen.
+           // A dedicated resolver for Course.averageRating will be added.
+           // We can't directly sort by a custom resolved field in the main Prisma query easily.
+           // One approach is to fetch all, then sort in JS, but that's bad for pagination.
+           // Another is a raw query or a more complex setup.
+           // For simplicity in this step, if HIGHEST_RATED is chosen, we'll defer actual sorting by rating to client or a post-processing step.
+           // Or, if performance allows and results are not huge, fetch necessary data and sort in resolver.
+           // Let's just add createdAt for now as a default sort for this case.
+          orderBy.push({ createdAt: 'desc' }); // Placeholder, actual rating sort is tricky
+          break;
+        default:
+          orderBy.push({ createdAt: 'desc' });
+      }
+
       return context.prisma.course.findMany({
-        where: publishedOnly ? { isPublished: true } : {},
+        where,
         include: {
           instructor: { include: { profile: true } },
           category: true,
-          // sections: true, // Avoid deep nesting in list views for performance
-          // reviews: true,
+          _count: { select: { enrollments: true, lessons: true } }, // For POPULARITY sort and general info
+          reviews: { select: { rating: true } } // For HIGHEST_RATED calculation
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
+        // TODO: Add take and skip for pagination
       });
     },
     getCoursesByCategory: async (_parent: any, { categoryId, publishedOnly = true }: { categoryId: string, publishedOnly?: boolean }, context: Context) => {
@@ -664,6 +741,33 @@ export const resolvers = {
       });
     },
 
+    updateUserProfile: async (_parent: any, { input }: { input: { firstName?: string, lastName?: string, bio?: string, avatarUrl?: string } }, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('Not authenticated. Please log in to update your profile.');
+      }
+
+      const { firstName, lastName, bio, avatarUrl } = input;
+
+      // Upsert ensures profile is created if it doesn't exist for the user
+      const updatedProfile = await context.prisma.profile.upsert({
+        where: { userId: context.user.id },
+        update: {
+          ...(firstName !== undefined && { firstName }),
+          ...(lastName !== undefined && { lastName }),
+          ...(bio !== undefined && { bio }),
+          ...(avatarUrl !== undefined && { avatarUrl }),
+        },
+        create: {
+          userId: context.user.id,
+          firstName,
+          lastName,
+          bio,
+          avatarUrl,
+        },
+      });
+      return updatedProfile;
+    },
+
     // --- Q&A Mutations ---
     askQuestion: async (_parent: any, { input }: { input: { lessonId: string, title?: string, content: string } }, context: Context) => {
       if (!context.user) {
@@ -897,6 +1001,30 @@ export const resolvers = {
     category: async (parent: { categoryId?: string | null }, _args: any, context: Context) => {
       if (!parent.categoryId) return null;
       return context.prisma.category.findUnique({ where: { id: parent.categoryId } });
+    },
+    _count: async (parent: { id: string }, _args: any, context: Context) => {
+        // This resolver is needed if _count is not directly fetched by Prisma `include` in parent.
+        // However, Prisma's `include: { _count: { select: { enrollments: true, lessons: true } } }` in the
+        // getAllCourses resolver should already populate this.
+        // If for some reason it's not populated, or if you need to calculate it differently:
+        const enrollmentsCount = await context.prisma.enrollment.count({ where: { courseId: parent.id } });
+        const lessonsCount = await context.prisma.lesson.count({ where: { section: { courseId: parent.id } } });
+        return { enrollments: enrollmentsCount, lessons: lessonsCount };
+    },
+    averageRating: async (parent: { id: string, reviews?: {rating: number}[] }, _args: any, context: Context) => {
+        // If reviews are already included (as they are in getAllCourses for this calculation)
+        if (parent.reviews && parent.reviews.length > 0) {
+            const sum = parent.reviews.reduce((acc, review) => acc + review.rating, 0);
+            return parseFloat((sum / parent.reviews.length).toFixed(1));
+        }
+        // Fallback if reviews were not pre-fetched (less efficient)
+        const reviews = await context.prisma.review.findMany({
+            where: { courseId: parent.id },
+            select: { rating: true }
+        });
+        if (reviews.length === 0) return 0;
+        const sum = reviews.reduce((acc, review) => acc + review.rating, 0);
+        return parseFloat((sum / reviews.length).toFixed(1));
     }
   },
 

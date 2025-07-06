@@ -19,6 +19,24 @@ export const LOGIN_MUTATION = gql`
   }
 `;
 
+// --- User Profile Mutation ---
+export const UPDATE_USER_PROFILE_MUTATION = gql`
+  mutation UpdateUserProfile($firstName: String, $lastName: String, $bio: String, $avatarUrl: String) {
+    updateUserProfile(input: {
+      firstName: $firstName,
+      lastName: $lastName,
+      bio: $bio,
+      avatarUrl: $avatarUrl
+    }) {
+      id
+      firstName
+      lastName
+      bio
+      avatarUrl
+    }
+  }
+`;
+
 // --- Progress Tracking Mutation ---
 export const TOGGLE_LESSON_COMPLETED_MUTATION = gql`
   mutation ToggleLessonCompleted($lessonId: ID!, $courseId: ID!, $completed: Boolean!) {

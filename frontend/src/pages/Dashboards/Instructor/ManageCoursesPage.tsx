@@ -185,26 +185,30 @@ const ManageCoursesPage: React.FC = () => {
       }
       refetchCourses(); // Refetch courses after mutation
       handleCloseModal();
+       // TODO: Replace with toast notification - e.g., toast.success(currentCourse?.id ? 'Course updated!' : 'Course created!');
     } catch (err: any) {
       console.error("Error saving course:", err.message);
+       // TODO: Replace with toast notification - e.g., toast.error(t('manageCourses.saveError', 'خطا در ذخیره دوره: ') + err.message);
       alert(t('manageCourses.saveError', 'خطا در ذخیره دوره: ') + err.message);
     }
   };
 
   const handleDeleteCourse = async (courseId: string) => {
+    // TODO: Replace window.confirm with a custom modal or MUI Dialog for better UX
     if (window.confirm(t('manageCourses.confirmDelete', 'آیا از حذف این دوره مطمئن هستید؟'))) {
       try {
         await deleteCourseMutation({
           variables: { id: courseId },
           update: (cache) => {
-            // Manually remove the course from the cache
             cache.evict({ id: cache.identify({ __typename: 'Course', id: courseId }) });
-            cache.gc(); // Garbage collect orphaned entities
+            cache.gc();
           }
         });
-        refetchCourses(); // Or update state manually
+        refetchCourses();
+        // TODO: Replace with toast notification - e.g., toast.success('Course deleted!');
       } catch (err: any) {
         console.error("Error deleting course:", err.message);
+        // TODO: Replace with toast notification - e.g., toast.error(t('manageCourses.deleteError', 'خطا در حذف دوره: ') + err.message);
         alert(t('manageCourses.deleteError', 'خطا در حذف دوره: ') + err.message);
       }
     }
@@ -218,8 +222,10 @@ const ManageCoursesPage: React.FC = () => {
         await publishCourseMutation({ variables: { id: course.id } });
       }
       refetchCourses();
+      // TODO: Replace with toast notification - e.g., toast.success('Publish status updated!');
     } catch (err: any) {
       console.error("Error toggling publish state:", err.message);
+      // TODO: Replace with toast notification - e.g., toast.error(t('manageCourses.publishError', 'خطا در تغییر وضعیت انتشار: ') + err.message);
       alert(t('manageCourses.publishError', 'خطا در تغییر وضعیت انتشار: ') + err.message);
     }
   };

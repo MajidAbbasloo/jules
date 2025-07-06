@@ -13,7 +13,8 @@ const InstructorDashboardPage = React.lazy(() => import('./pages/Dashboards/Inst
 const ManageCoursesPage = React.lazy(() => import('./pages/Dashboards/Instructor/ManageCoursesPage'));
 const ManageCourseContentPage = React.lazy(() => import('./pages/Dashboards/Instructor/ManageCourseContentPage'));
 const LearningPage = React.lazy(() => import('./pages/Common/LearningPage'));
-const CategoryCoursesPage = React.lazy(() => import('./pages/Common/CategoryCoursesPage')); // New Import
+const CategoryCoursesPage = React.lazy(() => import('./pages/Common/CategoryCoursesPage'));
+const UserProfilePage = React.lazy(() => import('./pages/User/UserProfilePage')); // New Import
 const AdminDashboardPage = React.lazy(() => import('./pages/Dashboards/AdminDashboardPage'));
 const CourseDetailsPage = React.lazy(() => import('./pages/Common/CourseDetailsPage'));
 const NotFoundPage = React.lazy(() => import('./pages/Common/NotFoundPage'));
@@ -76,8 +77,9 @@ function App() {
                   {user?.role === 'STUDENT' && <Link to="/dashboard/student" style={{ color: 'white', textDecoration: 'none' }}>{t('studentDashboard', 'Student Dashboard')}</Link>}
                   {user?.role === 'INSTRUCTOR' && <Link to="/dashboard/instructor" style={{ color: 'white', textDecoration: 'none' }}>{t('instructorDashboard', 'Instructor Dashboard')}</Link>}
                   {user?.role === 'ADMIN' && <Link to="/dashboard/admin" style={{ color: 'white', textDecoration: 'none' }}>{t('adminDashboard', 'Admin Dashboard')}</Link>}
+                  <Link to="/profile/me" style={{ color: 'white', textDecoration: 'none', fontStyle: 'italic' }}>{t('myProfile', 'پروفایل من')}</Link>
                   <button onClick={logout} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>{t('logout', 'Logout')}</button>
-                  {user && <span style={{ fontStyle: 'italic' }}>{t('loggedInAs', 'Logged in as')}: {user.email} ({user.role})</span>}
+                  {/* {user && <span style={{ fontStyle: 'italic' }}>{t('loggedInAs', 'Logged in as')}: {user.email} ({user.role})</span>} */}
                 </>
               )}
               <Link to="/course/sample-course" style={{ color: 'white', textDecoration: 'none' }}>{t('sampleCourse', 'Sample Course')}</Link>
@@ -91,6 +93,7 @@ function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <LoginPage />} />
               <Route path="/signup" element={isAuthenticated ? <Navigate to="/" /> : <SignupPage />} />
+              <Route path="/profile/me" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
 
               <Route
                 path="/dashboard/student"

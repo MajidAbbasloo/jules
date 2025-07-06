@@ -45,11 +45,13 @@ const UserManagementTab: React.FC = () => {
   const { loading, error, data, refetch } = useQuery<{ getAllUsers: User[] }>(GET_ALL_USERS_FOR_ADMIN);
   const [updateUserRole, { loading: updatingRole }] = useMutation(UPDATE_USER_ROLE_MUTATION, {
     onError: (err) => {
+      // TODO: Replace with toast notification - e.g., toast.error(err.message || t('userManagement.roleUpdateErrorGeneric'));
       setMutationError(err.message || t('userManagement.roleUpdateErrorGeneric', 'خطا در به‌روزرسانی نقش کاربر.'));
     },
     onCompleted: () => {
       setMutationError(null);
       refetch(); // Refetch user list to show updated role
+      // TODO: Replace with toast notification - e.g., toast.success('User role updated!');
     }
   });
 
