@@ -1,5 +1,6 @@
 import { gql } from '@apollo/client';
 
+// --- Auth Mutations ---
 export const LOGIN_MUTATION = gql`
   mutation Login($email: String!, $password: String!) {
     login(input: { email: $email, password: $password }) {
@@ -8,7 +9,7 @@ export const LOGIN_MUTATION = gql`
         id
         email
         role
-        isEmailVerified
+        isEmailVerified # Ensure this is queried
         profile {
           firstName
           lastName
@@ -26,7 +27,7 @@ export const REGISTER_MUTATION = gql`
         id
         email
         role
-        isEmailVerified
+        isEmailVerified # Ensure this is queried
         profile {
           firstName
           lastName
@@ -36,12 +37,198 @@ export const REGISTER_MUTATION = gql`
   }
 `;
 
-// Enum UserRole needs to be available to the client if used directly in variables,
-// but it's defined on the server. For client-side forms, you'd typically use strings
-// that match the enum values, e.g., "STUDENT", "INSTRUCTOR".
-// The UserRole enum is defined in the backend's GraphQL schema.
-// If you need to reference it explicitly in client-side TypeScript for type safety
-// (e.g. for a dropdown), you might define a similar enum/type on the client.
+// --- Course Mutations ---
+export const CREATE_COURSE_MUTATION = gql`
+  mutation CreateCourse($title: String!, $description: String, $price: Float, $thumbnailUrl: String, $tags: [String!], $categoryId: ID) {
+    createCourse(input: {
+      title: $title,
+      description: $description,
+      price: $price,
+      thumbnailUrl: $thumbnailUrl,
+      tags: $tags,
+      categoryId: $categoryId
+    }) {
+      id
+      title
+      description
+      price
+      isPublished
+      category {
+        id
+        name
+      }
+    }
+  }
+`;
+
+export const UPDATE_COURSE_MUTATION = gql`
+  mutation UpdateCourse($id: ID!, $title: String, $description: String, $price: Float, $thumbnailUrl: String, $tags: [String!], $isPublished: Boolean, $categoryId: ID) {
+    updateCourse(id: $id, input: {
+      title: $title,
+      description: $description,
+      price: $price,
+      thumbnailUrl: $thumbnailUrl,
+      tags: $tags,
+      isPublished: $isPublished,
+      categoryId: $categoryId
+    }) {
+      id
+      title
+      description
+      price
+      thumbnailUrl
+      tags
+      isPublished
+      category {
+        id
+        name
+      }
+      # Add sections and lessons if needed to update cache
+    }
+  }
+`;
+
+export const DELETE_COURSE_MUTATION = gql`
+  mutation DeleteCourse($id: ID!) {
+    deleteCourse(id: $id) {
+      id # Return ID of deleted course for cache update
+    }
+  }
+`;
+
+export const PUBLISH_COURSE_MUTATION = gql`
+  mutation PublishCourse($id: ID!) {
+    publishCourse(id: $id) {
+      id
+      isPublished
+    }
+  }
+`;
+
+export const UNPUBLISH_COURSE_MUTATION = gql`
+  mutation UnpublishCourse($id: ID!) {
+    unpublishCourse(id: $id) {
+      id
+      isPublished
+    }
+  }
+`;
+
+
+// --- Section Mutations ---
+export const CREATE_SECTION_MUTATION = gql`
+  mutation CreateSection($title: String!, $order: Int!, $courseId: ID!) {
+    createSection(input: { title: $title, order: $order, courseId: $courseId }) {
+      id
+      title
+      order
+      course {
+        id # For cache updates
+      }
+      lessons { # Initialize with empty lessons array
+        id
+      }
+    }
+  }
+`;
+
+export const UPDATE_SECTION_MUTATION = gql`
+  mutation UpdateSection($id: ID!, $title: String, $order: Int) {
+    updateSection(id: $id, input: { title: $title, order: $order }) {
+      id
+      title
+      order
+    }
+  }
+`;
+
+export const DELETE_SECTION_MUTATION = gql`
+  mutation DeleteSection($id: ID!) {
+    deleteSection(id: $id) {
+      id
+    }
+  }
+`;
+
+// --- Lesson Mutations ---
+export const CREATE_LESSON_MUTATION = gql`
+  mutation CreateLesson(
+    $title: String!,
+    $order: Int!,
+    $sectionId: ID!,
+    $content: String,
+    $videoUrl: String,
+    $duration: Int,
+    $isPreviewable: Boolean,
+    $resources: Json
+  ) {
+    createLesson(input: {
+      title: $title,
+      order: $order,
+      sectionId: $sectionId,
+      content: $content,
+      videoUrl: $videoUrl,
+      duration: $duration,
+      isPreviewable: $isPreviewable,
+      resources: $resources
+    }) {
+      id
+      title
+      order
+      content
+      videoUrl
+      duration
+      isPreviewable
+      resources
+      section {
+        id # For cache updates
+      }
+    }
+  }
+`;
+
+export const UPDATE_LESSON_MUTATION = gql`
+  mutation UpdateLesson(
+    $id: ID!,
+    $title: String,
+    $order: Int,
+    $content: String,
+    $videoUrl: String,
+    $duration: Int,
+    $isPreviewable: Boolean,
+    $resources: Json
+  ) {
+    updateLesson(id: $id, input: {
+      title: $title,
+      order: $order,
+      content: $content,
+      videoUrl: $videoUrl,
+      duration: $duration,
+      isPreviewable: $isPreviewable,
+      resources: $resources
+    }) {
+      id
+      title
+      order
+      content
+      videoUrl
+      duration
+      isPreviewable
+      resources
+    }
+  }
+`;
+
+export const DELETE_LESSON_MUTATION = gql`
+  mutation DeleteLesson($id: ID!) {
+    deleteLesson(id: $id) {
+      id
+    }
+  }
+`;
+
+
+// ClientUserRole enum (matches backend UserRole for clarity if needed in forms)
 /*
 export enum ClientUserRole {
   STUDENT = "STUDENT",

@@ -1,8 +1,15 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient, UserRole, Course, Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { RegisterInput, LoginInput }
-from './types'; // Assuming types.ts for input validation, will create later if complex
+import { AuthenticationError, ForbiddenError, UserInputError } from 'apollo-server-express';
+import { GraphQLScalarType, Kind } from 'graphql';
+
+// TODO: Define input types more formally if using validation libraries (e.g. Zod)
+// For now, they are inferred from GraphQL schema inputs.
+// interface RegisterInput { ... }
+// interface LoginInput { ... }
+// interface CreateCourseInput { ... }
+// ... etc.
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
@@ -12,143 +19,439 @@ interface Context {
   user?: { id: string; role: UserRole }; // Optional user, present if authenticated
 }
 
+// Custom DateTime scalar
+const DateTimeResolver = new GraphQLScalarType({
+  name: 'DateTime',
+  description: 'DateTime custom scalar type',
+  parseValue(value: any) {
+    return new Date(value); // value from the client
+  },
+  serialize(value: any) {
+    return value.toISOString(); // value sent to the client
+  },
+  parseLiteral(ast) {
+    if (ast.kind === Kind.INT) {
+      return new Date(parseInt(ast.value, 10)); // ast value is always in string format
+    }
+    if (ast.kind === Kind.STRING) {
+      return new Date(ast.value);
+    }
+    return null;
+  },
+});
+
+// Custom Json scalar (basic implementation)
+const JsonResolver = new GraphQLScalarType({
+    name: 'Json',
+    description: 'Json custom scalar type',
+    parseValue(value: any) {
+        return value; // value from the client (assume it's already JSON)
+    },
+    serialize(value: any) {
+        return value; // value sent to the client
+    },
+    parseLiteral(ast) {
+        if (ast.kind === Kind.STRING) {
+            try {
+                return JSON.parse(ast.value);
+            } catch (e) {
+                return null; // Or throw error
+            }
+        }
+        // Add handling for other AST kinds if necessary (e.g. OBJECT, LIST)
+        return null;
+    },
+});
+
+
 export const resolvers = {
+  DateTime: DateTimeResolver,
+  Json: JsonResolver,
+
   Query: {
-    hello: () => "Hello from Apollo Server!",
     me: async (_parent: any, _args: any, context: Context) => {
       if (!context.user) {
-        return null; // Or throw an AuthenticationError
+        return null;
       }
       return context.prisma.user.findUnique({
         where: { id: context.user.id },
         include: { profile: true },
       });
     },
+
+    // Course Queries
+    getCourseById: async (_parent: any, { id }: { id: string }, context: Context) => {
+      return context.prisma.course.findUnique({
+        where: { id },
+        include: {
+          instructor: { include: { profile: true } },
+          sections: { include: { lessons: true }, orderBy: { order: 'asc'} },
+          category: true,
+          reviews: { include: { user: { include: { profile: true } } } },
+          // enrollments: true, // Potentially large, fetch separately or paginate
+        },
+      });
+    },
+    getAllCourses: async (_parent: any, { publishedOnly = true }: { publishedOnly?: boolean }, context: Context) => {
+      return context.prisma.course.findMany({
+        where: publishedOnly ? { isPublished: true } : {},
+        include: {
+          instructor: { include: { profile: true } },
+          category: true,
+          // sections: true, // Avoid deep nesting in list views for performance
+          // reviews: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    },
+    getCoursesByCategory: async (_parent: any, { categoryId, publishedOnly = true }: { categoryId: string, publishedOnly?: boolean }, context: Context) => {
+      return context.prisma.course.findMany({
+        where: {
+          categoryId,
+          ...(publishedOnly && { isPublished: true })
+        },
+        include: {
+          instructor: { include: { profile: true } },
+          category: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    },
+
+    // Category Queries
+    getAllCategories: async (_parent: any, _args: any, context: Context) => {
+      return context.prisma.category.findMany({
+        include: { _count: { select: { courses: true } } }, // Include course count
+        orderBy: { name: 'asc' },
+      });
+    },
+    getCategoryById: async (_parent: any, { id }: { id: string }, context: Context) => {
+      return context.prisma.category.findUnique({
+        where: { id },
+        include: { courses: { where: { isPublished: true } } },
+      });
+    },
   },
 
   Mutation: {
-    register: async (_parent: any, { input }: { input: RegisterInput }, context: Context) => {
+    // --- Auth Mutations ---
+    register: async (_parent: any, { input }: { input: any /* RegisterInput */ }, context: Context) => {
       const { email, password, firstName, lastName, role } = input;
+      if (!email || !password) throw new UserInputError('Email and password are required.');
+      if (password.length < 6) throw new UserInputError('Password must be at least 6 characters long.');
 
-      // 1. Validate input (basic example, can be more complex with a library like Joi or Zod)
-      if (!email || !password) {
-        throw new Error('Email and password are required.');
-      }
-      if (password.length < 6) {
-        throw new Error('Password must be at least 6 characters long.');
-      }
-
-      // 2. Check if user already exists
       const existingUser = await context.prisma.user.findUnique({ where: { email } });
-      if (existingUser) {
-        throw new Error('User with this email already exists.');
-      }
+      if (existingUser) throw new UserInputError('User with this email already exists.');
 
-      // 3. Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
-
-      // 4. Create user and profile (if details provided)
-      const userRole = role || UserRole.STUDENT; // Default role
+      const userRole = role || UserRole.STUDENT;
 
       const user = await context.prisma.user.create({
         data: {
           email,
           password: hashedPassword,
           role: userRole,
-          profile: (firstName || lastName) ? {
-            create: {
-              firstName,
-              lastName,
-            },
-          } : undefined,
+          profile: (firstName || lastName) ? { create: { firstName, lastName } } : undefined,
         },
         include: { profile: true },
       });
 
-      // 5. Generate JWT token
-      const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, {
-        expiresIn: JWT_EXPIRES_IN,
-      });
-
-      // 6. Return token and user
-      return {
-        token,
-        user,
-      };
+      const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+      return { token, user };
     },
 
-    login: async (_parent: any, { input }: { input: LoginInput }, context: Context) => {
+    login: async (_parent: any, { input }: { input: any /* LoginInput */ }, context: Context) => {
       const { email, password } = input;
+      const user = await context.prisma.user.findUnique({ where: { email }, include: { profile: true } });
+      if (!user) throw new AuthenticationError('Invalid credentials.');
 
-      // 1. Find user by email
-      const user = await context.prisma.user.findUnique({
-        where: { email },
-        include: { profile: true }
-      });
-      if (!user) {
-        throw new Error('Invalid credentials. User not found.');
-      }
-
-      // 2. Compare password
       const isValidPassword = await bcrypt.compare(password, user.password);
-      if (!isValidPassword) {
-        throw new Error('Invalid credentials. Password incorrect.');
+      if (!isValidPassword) throw new AuthenticationError('Invalid credentials.');
+
+      // if (!user.isEmailVerified) throw new AuthenticationError('Please verify your email.');
+
+      const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+      return { token, user };
+    },
+
+    // --- Course Mutations ---
+    createCourse: async (_parent: any, { input }: { input: any /* CreateCourseInput */ }, context: Context): Promise<Course> => {
+      if (!context.user) throw new AuthenticationError('Not authenticated');
+      if (context.user.role !== UserRole.INSTRUCTOR && context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Only instructors or admins can create courses.');
       }
 
-      // TODO: Check for email verification if required for login
-      // if (!user.isEmailVerified) {
-      //   throw new Error('Please verify your email before logging in.');
-      // }
+      const { title, description, price, thumbnailUrl, tags, categoryId } = input;
+      if (!title) throw new UserInputError('Course title is required.');
 
-      // 3. Generate JWT token
-      const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, {
-        expiresIn: JWT_EXPIRES_IN,
+      return context.prisma.course.create({
+        data: {
+          title,
+          description,
+          price,
+          thumbnailUrl,
+          tags: tags || [],
+          instructorId: context.user.id,
+          ...(categoryId && { category: { connect: { id: categoryId } } }),
+        },
+        include: { instructor: { include: { profile: true } }, category: true }
       });
-
-      // 4. Return token and user
-      return {
-        token,
-        user,
-      };
     },
+
+    updateCourse: async (_parent: any, { id, input }: { id: string, input: any /* UpdateCourseInput */ }, context: Context): Promise<Course | null> => {
+      if (!context.user) throw new AuthenticationError('Not authenticated');
+
+      const course = await context.prisma.course.findUnique({ where: { id } });
+      if (!course) throw new UserInputError('Course not found.');
+
+      if (context.user.role !== UserRole.ADMIN && course.instructorId !== context.user.id) {
+        throw new ForbiddenError('You can only update your own courses.');
+      }
+
+      const { title, description, price, thumbnailUrl, tags, isPublished, categoryId } = input;
+
+      return context.prisma.course.update({
+        where: { id },
+        data: {
+          ...(title && { title }),
+          ...(description && { description }),
+          ...(price !== undefined && { price }), // Allow setting price to 0
+          ...(thumbnailUrl && { thumbnailUrl }),
+          ...(tags && { tags }),
+          ...(isPublished !== undefined && { isPublished }),
+          ...(categoryId && { category: { connect: { id: categoryId } } }),
+          ...(!categoryId && input.hasOwnProperty('categoryId') && { category: { disconnect: true } }), // Allow unsetting category
+        },
+         include: { instructor: { include: { profile: true } }, category: true, sections: {include: {lessons: true}} }
+      });
+    },
+
+    deleteCourse: async (_parent: any, { id }: { id: string }, context: Context): Promise<Course | null> => {
+      if (!context.user) throw new AuthenticationError('Not authenticated');
+
+      const course = await context.prisma.course.findUnique({ where: { id } });
+      if (!course) throw new UserInputError('Course not found.');
+
+      if (context.user.role !== UserRole.ADMIN && course.instructorId !== context.user.id) {
+        throw new ForbiddenError('You can only delete your own courses.');
+      }
+      // Add more checks: e.g., cannot delete if there are active enrollments, unless admin override.
+      // For simplicity, direct delete for now. Consider soft delete in real app.
+      return context.prisma.course.delete({ where: { id } });
+    },
+
+    publishCourse: async (_parent: any, { id }: { id: string }, context: Context): Promise<Course | null> => {
+      if (!context.user) throw new AuthenticationError('Not authenticated');
+      const course = await context.prisma.course.findUnique({ where: { id } });
+      if (!course) throw new UserInputError('Course not found.');
+      if (context.user.role !== UserRole.ADMIN && course.instructorId !== context.user.id) {
+        throw new ForbiddenError('You can only publish your own courses.');
+      }
+      // TODO: Add validation, e.g., course must have at least one section and lesson.
+      return context.prisma.course.update({
+        where: { id },
+        data: { isPublished: true },
+        include: { instructor: {include: {profile: true}}, category: true }
+      });
+    },
+
+    unpublishCourse: async (_parent: any, { id }: { id: string }, context: Context): Promise<Course | null> => {
+      if (!context.user) throw new AuthenticationError('Not authenticated');
+      const course = await context.prisma.course.findUnique({ where: { id } });
+      if (!course) throw new UserInputError('Course not found.');
+      if (context.user.role !== UserRole.ADMIN && course.instructorId !== context.user.id) {
+        throw new ForbiddenError('You can only unpublish your own courses.');
+      }
+      return context.prisma.course.update({
+        where: { id },
+        data: { isPublished: false },
+        include: { instructor: {include: {profile: true}}, category: true }
+      });
+    },
+
+    // --- Section Mutations ---
+    createSection: async (_parent: any, { input }: { input: any /* CreateSectionInput */ }, context: Context) => {
+        if (!context.user) throw new AuthenticationError('Not authenticated');
+        const { title, order, courseId } = input;
+        if(!title || order === undefined || !courseId) throw new UserInputError('Missing required fields for section.');
+
+        const course = await context.prisma.course.findUnique({ where: { id: courseId } });
+        if (!course) throw new UserInputError('Course not found.');
+        if (context.user.role !== UserRole.ADMIN && course.instructorId !== context.user.id) {
+            throw new ForbiddenError('You can only add sections to your own courses.');
+        }
+        return context.prisma.section.create({
+            data: { title, order, courseId },
+            include: { course: true, lessons: true }
+        });
+    },
+
+    updateSection: async (_parent: any, { id, input }: { id: string, input: any /* UpdateSectionInput */ }, context: Context) => {
+        if (!context.user) throw new AuthenticationError('Not authenticated');
+        const section = await context.prisma.section.findUnique({ where: { id }, include: { course: true } });
+        if (!section) throw new UserInputError('Section not found.');
+        if (context.user.role !== UserRole.ADMIN && section.course.instructorId !== context.user.id) {
+            throw new ForbiddenError('You can only update sections in your own courses.');
+        }
+        return context.prisma.section.update({
+            where: { id },
+            data: { ...input },
+            include: { course: true, lessons: true }
+        });
+    },
+
+    deleteSection: async (_parent: any, { id }: { id: string }, context: Context) => {
+        if (!context.user) throw new AuthenticationError('Not authenticated');
+        const section = await context.prisma.section.findUnique({ where: { id }, include: { course: true } });
+        if (!section) throw new UserInputError('Section not found.');
+        if (context.user.role !== UserRole.ADMIN && section.course.instructorId !== context.user.id) {
+            throw new ForbiddenError('You can only delete sections from your own courses.');
+        }
+        // Lessons within section will be cascade deleted due to schema relation
+        return context.prisma.section.delete({ where: { id } });
+    },
+
+    // --- Lesson Mutations ---
+    createLesson: async (_parent: any, { input }: { input: any /* CreateLessonInput */ }, context: Context) => {
+        if (!context.user) throw new AuthenticationError('Not authenticated');
+        const { title, order, sectionId, content, videoUrl, duration, isPreviewable, resources } = input;
+        if(!title || order === undefined || !sectionId) throw new UserInputError('Missing required fields for lesson.');
+
+        const section = await context.prisma.section.findUnique({ where: { id: sectionId }, include: { course: true } });
+        if (!section) throw new UserInputError('Section not found.');
+        if (context.user.role !== UserRole.ADMIN && section.course.instructorId !== context.user.id) {
+            throw new ForbiddenError('You can only add lessons to sections in your own courses.');
+        }
+        return context.prisma.lesson.create({
+            data: { title, order, sectionId, content, videoUrl, duration, isPreviewable: isPreviewable || false, resources: resources || Prisma.JsonNull },
+            include: { section: { include: { course: true } } }
+        });
+    },
+
+    updateLesson: async (_parent: any, { id, input }: { id: string, input: any /* UpdateLessonInput */ }, context: Context) => {
+        if (!context.user) throw new AuthenticationError('Not authenticated');
+        const lesson = await context.prisma.lesson.findUnique({ where: { id }, include: { section: { include: { course: true } } } });
+        if (!lesson) throw new UserInputError('Lesson not found.');
+        if (context.user.role !== UserRole.ADMIN && lesson.section.course.instructorId !== context.user.id) {
+            throw new ForbiddenError('You can only update lessons in your own courses.');
+        }
+        return context.prisma.lesson.update({
+            where: { id },
+            data: { ...input, ...(input.resources === undefined && { resources: Prisma.JsonNull }) }, // Ensure resources can be nulled
+            include: { section: { include: { course: true } } }
+        });
+    },
+
+    deleteLesson: async (_parent: any, { id }: { id: string }, context: Context) => {
+        if (!context.user) throw new AuthenticationError('Not authenticated');
+        const lesson = await context.prisma.lesson.findUnique({ where: { id }, include: { section: { include: { course: true } } } });
+        if (!lesson) throw new UserInputError('Lesson not found.');
+        if (context.user.role !== UserRole.ADMIN && lesson.section.course.instructorId !== context.user.id) {
+            throw new ForbiddenError('You can only delete lessons from your own courses.');
+        }
+        return context.prisma.lesson.delete({ where: { id } });
+    },
+
+    // --- Category Mutations (Admin only) ---
+    createCategory: async (_parent: any, { name, slug, description }: { name: string, slug: string, description?: string }, context: Context) => {
+        if (!context.user || context.user.role !== UserRole.ADMIN) throw new ForbiddenError('Only admins can create categories.');
+        if(!name || !slug) throw new UserInputError('Category name and slug are required.');
+        return context.prisma.category.create({ data: { name, slug, description } });
+    },
+
+    updateCategory: async (_parent: any, { id, name, slug, description }: { id: string, name?: string, slug?: string, description?: string }, context: Context) => {
+        if (!context.user || context.user.role !== UserRole.ADMIN) throw new ForbiddenError('Only admins can update categories.');
+        return context.prisma.category.update({
+            where: { id },
+            data: {
+                ...(name && { name }),
+                ...(slug && { slug }),
+                ...(description !== undefined && { description }), // Allow setting description to null/empty
+             },
+        });
+    },
+
+    deleteCategory: async (_parent: any, { id }: { id: string }, context: Context) => {
+        if (!context.user || context.user.role !== UserRole.ADMIN) throw new ForbiddenError('Only admins can delete categories.');
+        // Note: Deleting a category might fail if courses are still linked to it,
+        // depending on DB constraints or if you add checks here.
+        // Consider setting categoryId on courses to null instead, or preventing deletion if courses exist.
+        return context.prisma.category.delete({ where: { id } });
+    }
   },
 
-  // Resolver for User.profile if needed separately, though Prisma handles it with `include`
+  // --- Relational Resolvers (Type Resolvers) ---
+  // These resolve fields on types if they are not directly available or need custom logic.
+  // Prisma's `include` often handles this, but explicit resolvers are good for clarity or complex cases.
+
   User: {
+    // Example: if you wanted to fetch courses for an instructor user separately
+    // courses: async (parent: { id: string; role: UserRole }, _args: any, context: Context) => {
+    //   if (parent.role === UserRole.INSTRUCTOR) {
+    //     return context.prisma.course.findMany({ where: { instructorId: parent.id } });
+    //   }
+    //   return []; // Or null
+    // },
     profile: async (parent: { id: string }, _args: any, context: Context) => {
-      // If profile wasn't included in the parent query, fetch it here
-      // This is often handled by Prisma's `include` option in the parent resolver.
-      // However, it can be useful if you want to fetch it conditionally or separately.
-      return context.prisma.profile.findUnique({
-        where: { userId: parent.id },
-      });
+      return context.prisma.profile.findUnique({ where: { userId: parent.id } });
     },
-    // Ensure createdAt is returned as a string (ISO date)
-    createdAt: (parent: { createdAt: Date }) => parent.createdAt.toISOString(),
   },
 
-  Profile: {
-    // If you need specific resolvers for Profile fields, add them here
+  Course: {
+    instructor: async (parent: { instructorId: string }, _args: any, context: Context) => {
+      return context.prisma.user.findUnique({ where: { id: parent.instructorId }, include: { profile: true } });
+    },
+    sections: async (parent: { id: string }, _args: any, context: Context) => {
+      return context.prisma.section.findMany({ where: { courseId: parent.id }, orderBy: { order: 'asc' }, include: { lessons: { orderBy: {order: 'asc'}}} });
+    },
+    enrollments: async (parent: { id: string }, _args: any, context: Context) => {
+      return context.prisma.enrollment.findMany({ where: { courseId: parent.id }, include: {user: {include: {profile: true}}} });
+    },
+    reviews: async (parent: { id: string }, _args: any, context: Context) => {
+      return context.prisma.review.findMany({ where: { courseId: parent.id }, include: {user: {include: {profile: true}}} });
+    },
+    category: async (parent: { categoryId?: string | null }, _args: any, context: Context) => {
+      if (!parent.categoryId) return null;
+      return context.prisma.category.findUnique({ where: { id: parent.categoryId } });
+    }
+  },
+
+  Section: {
+    course: async (parent: { courseId: string }, _args: any, context: Context) => {
+      return context.prisma.course.findUnique({ where: { id: parent.courseId } });
+    },
+    lessons: async (parent: { id: string }, _args: any, context: Context) => {
+      return context.prisma.lesson.findMany({ where: { sectionId: parent.id }, orderBy: { order: 'asc' } });
+    }
+  },
+
+  Lesson: {
+    section: async (parent: { sectionId: string }, _args: any, context: Context) => {
+      return context.prisma.section.findUnique({ where: { id: parent.sectionId } });
+    }
+  },
+
+  Category: {
+    courses: async (parent: { id: string }, _args: any, context: Context) => {
+      return context.prisma.course.findMany({ where: { categoryId: parent.id, isPublished: true } });
+    }
+  },
+
+  Enrollment: {
+    user: async (parent: { userId: string }, _args: any, context: Context) => {
+      return context.prisma.user.findUnique({ where: { id: parent.userId }, include: {profile: true} });
+    },
+    course: async (parent: { courseId: string }, _args: any, context: Context) => {
+      return context.prisma.course.findUnique({ where: { id: parent.courseId } });
+    }
+  },
+
+  Review: {
+    user: async (parent: { userId: string }, _args: any, context: Context) => {
+      return context.prisma.user.findUnique({ where: { id: parent.userId }, include: {profile: true} });
+    },
+    course: async (parent: { courseId: string }, _args: any, context: Context) => {
+      return context.prisma.course.findUnique({ where: { id: parent.courseId } });
+    }
   }
 };
-
-// It's good practice to define input types for resolvers if they become complex
-// or if you want to use them with validation libraries.
-// For now, RegisterInput and LoginInput are simple enough to be inline,
-// but for larger applications, you might put them in a separate types.ts file.
-
-// Example for backend/src/graphql/types.ts (if you create it)
-/*
-export interface RegisterInput {
-  email: string;
-  password: string;
-  firstName?: string;
-  lastName?: string;
-  role?: UserRole;
-}
-
-export interface LoginInput {
-  email: string;
-  password: string;
-}
-*/

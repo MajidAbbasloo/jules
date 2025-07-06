@@ -23,7 +23,9 @@ model User {
   updatedAt          DateTime  @updatedAt
 
   profile   Profile?
-  // TODO: Add relations to courses (if instructor), enrollments (if student)
+  courses   Course[] // Courses created by this user (if instructor)
+  enrollments Enrollment[] // Courses this user is enrolled in (if student)
+  // TODO: Add other relations like reviews given, etc.
 }
 
 model Profile {
@@ -38,6 +40,122 @@ model Profile {
 }
 
 enum UserRole {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+model Course {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?   @db.Text
+  price         Float?    @default(0)
+  thumbnailUrl  String?
+  tags          String[]  // List of tags or keywords
+  isPublished   Boolean   @default(false)
+  instructorId  String
+  instructor    User      @relation(fields: [instructorId], references: [id])
+  sections      Section[]
+  enrollments   Enrollment[]
+  reviews       Review[]
+  category      Category? @relation(fields: [categoryId], references: [id])
+  categoryId    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([instructorId])
+  @@index([categoryId])
+}
+
+model Section {
+  id          String    @id @default(cuid())
+  title       String
+  order       Int       // Order of the section within the course
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id            String    @id @default(cuid())
+  title         String
+  content       String?   @db.Text // Could be markdown, text, or link to video metadata
+  videoUrl      String?   // URL to the video file or video service
+  duration      Int?      // Duration in seconds or minutes
+  order         Int       // Order of the lesson within the section
+  isPreviewable Boolean   @default(false) // Can students view this lesson before enrolling?
+  sectionId     String
+  section       Section   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  resources     Json?     // { title: string, url: string }[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([sectionId])
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique // For URL friendly category links
+  description String?
+  courses     Course[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Enrollment {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  courseId      String
+  course        Course    @relation(fields: [courseId], references: [id])
+  enrolledAt    DateTime  @default(now())
+  progress      Float?    @default(0) // e.g., percentage completion
+  completedAt   DateTime?
+
+  @@unique([userId, courseId]) // A user can only enroll in a course once
+  @@index([userId])
+  @@index([courseId])
+}
+
+model Review {
+  id          String    @id @default(cuid())
+  rating      Int       // e.g., 1 to 5 stars
+  comment     String?   @db.Text
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, courseId]) // A user can only review a course once
+  @@index([userId])
+  @@index([courseId])
+}
+
+enum ResourceType {
+  VIDEO
+  PDF
+  SLIDE
+  DOCUMENT
+  EXTERNAL_LINK
+}
+
+// Example for a more structured Resource model if Json is not preferred for resources in Lesson
+// model Resource {
+//   id        String    @id @default(cuid())
+//   title     String
+//   type      ResourceType
+//   url       String?   // URL if it's a link or hosted file
+//   content   Bytes?    // For directly uploaded small files, though not recommended for large files
+//   lessonId  String
+//   lesson    Lesson    @relation(fields: [lessonId], references: [id])
+//   createdAt DateTime  @default(now())
+// }
   STUDENT
   INSTRUCTOR
   ADMIN

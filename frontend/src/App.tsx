@@ -10,6 +10,8 @@ const LoginPage = React.lazy(() => import('./pages/Auth/LoginPage'));
 const SignupPage = React.lazy(() => import('./pages/Auth/SignupPage'));
 const StudentDashboardPage = React.lazy(() => import('./pages/Dashboards/StudentDashboardPage'));
 const InstructorDashboardPage = React.lazy(() => import('./pages/Dashboards/InstructorDashboardPage'));
+const ManageCoursesPage = React.lazy(() => import('./pages/Dashboards/Instructor/ManageCoursesPage'));
+const ManageCourseContentPage = React.lazy(() => import('./pages/Dashboards/Instructor/ManageCourseContentPage')); // New Import
 const AdminDashboardPage = React.lazy(() => import('./pages/Dashboards/AdminDashboardPage'));
 const CourseDetailsPage = React.lazy(() => import('./pages/Common/CourseDetailsPage'));
 const NotFoundPage = React.lazy(() => import('./pages/Common/NotFoundPage'));
@@ -97,13 +99,19 @@ function App() {
                 }
               />
               <Route
-                path="/dashboard/instructor"
+                path="/dashboard/instructor" // Parent route for instructor dashboard
                 element={
                   <ProtectedRoute allowedRoles={['INSTRUCTOR', 'ADMIN']}>
                     <InstructorDashboardPage />
                   </ProtectedRoute>
                 }
-              />
+              >
+                {/* Nested routes for instructor dashboard */}
+                <Route index element={ <div style={{padding: '10px', background: '#e9ecef', border: '1px solid #ced4da', borderRadius: '5px'}}>{t('instructorDashboard.welcomeText', 'به داشبورد خود خوش آمدید. برای مدیریت دوره ها، لینک بالا را انتخاب کنید.')}</div> } /> {/* Default content for /dashboard/instructor */}
+                <Route path="courses" element={<ManageCoursesPage />} />
+                <Route path="course/:courseId/content" element={<ManageCourseContentPage />} />
+                {/* Add more nested routes here e.g., analytics, profile */}
+              </Route>
               <Route
                 path="/dashboard/admin"
                 element={
