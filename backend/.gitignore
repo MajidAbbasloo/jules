@@ -1,0 +1,34 @@
+# Node
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Prisma
+prisma/migrations/*
+!prisma/migrations/migration_lock.toml
+# Keep the lock file, but ignore generated migration SQL files if any are stored here by mistake
+# It's generally better to let Prisma manage migrations in its designated way.
+
+# Env files
+.env
+.env*.local
+.env*.production
+.env*.development
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE / Editor specific
+.idea/
+.vscode/
+*.swp
+*.swo

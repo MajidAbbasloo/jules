@@ -1,0 +1,23 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  direction: rtl; /* Set default direction to RTL */
+  text-align: right; /* Align text to the right for RTL */
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Basic RTL adjustments */
+ul, ol {
+  padding-right: 20px; /* Adjust padding for RTL lists */
+  padding-left: 0;
+}
+
+/* More specific RTL styles will be added as components are built */
