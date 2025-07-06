@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { GET_COURSE_DETAILS_FOR_EDIT } from '../../../graphql/queries'; // Using this as it fetches sections and lessons
 import {
     CREATE_SECTION_MUTATION, UPDATE_SECTION_MUTATION, DELETE_SECTION_MUTATION,
-    CREATE_LESSON_MUTATION, UPDATE_LESSON_MUTATION, DELETE_LESSON_MUTATION
+    CREATE_LESSON_MUTATION, UPDATE_LESSON_MUTATION, DELETE_LESSON_MUTATION,
+    GET_MOCK_UPLOAD_URL_MUTATION
 } from '../../../graphql/mutations';
 
 // MUI placeholder imports (actual components not used due to env constraints)
@@ -78,6 +79,8 @@ const ManageCourseContentPage: React.FC = () => {
   const [currentSection, setCurrentSection] = useState<Partial<SectionInput> | null>(null);
   const [currentLesson, setCurrentLesson] = useState<Partial<LessonInput> | null>(null);
   const [editingSectionIdForLesson, setEditingSectionIdForLesson] = useState<string | null>(null);
+  const [videoFileStatus, setVideoFileStatus] = useState<string | null>(null);
+
 
   // Fetch course details
   const { loading: loadingCourse, error: errorCourse, data: dataCourse, refetch: refetchCourse } = useQuery(GET_COURSE_DETAILS_FOR_EDIT, {
@@ -100,6 +103,9 @@ const ManageCourseContentPage: React.FC = () => {
   const [updateLesson] = useMutation(UPDATE_LESSON_MUTATION);
   const [deleteLesson] = useMutation(DELETE_LESSON_MUTATION);
 
+  // Mock Upload URL Mutation
+  const [getMockUploadUrl, { loading: uploadingVideo }] = useMutation(GET_MOCK_UPLOAD_URL_MUTATION);
+
 
   // Modal Open/Close Handlers
   const handleOpenSectionModal = (section?: Section) => {
@@ -121,6 +127,7 @@ const ManageCourseContentPage: React.FC = () => {
     setIsLessonModalOpen(false);
     setCurrentLesson(null);
     setEditingSectionIdForLesson(null);
+     setVideoFileStatus(null); // Reset video file status
   };
 
   // Form Change Handlers
@@ -135,6 +142,26 @@ const ManageCourseContentPage: React.FC = () => {
     // @ts-ignore
     const val = isCheckbox ? e.target.checked : (name === 'order' || name === 'duration' ? parseInt(value) || 0 : value);
     setCurrentLesson(prev => ({ ...prev, [name]: val }));
+  };
+
+  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setVideoFileStatus(t('uploadingFile', 'در حال پردازش فایل...'));
+      try {
+        const response = await getMockUploadUrl({ variables: { filename: file.name, fileType: file.type } });
+        const mockUrl = response.data?.getMockUploadUrl;
+        if (mockUrl) {
+          setCurrentLesson(prev => ({ ...prev, videoUrl: mockUrl }));
+          setVideoFileStatus(t('fileSelected', 'فایل انتخاب شد: ') + file.name + t('mockUrlNotice', ' (URL شبیه‌سازی شده)'));
+        } else {
+          setVideoFileStatus(t('uploadError', 'خطا در دریافت URL شبیه‌سازی شده.'));
+        }
+      } catch (err: any) {
+        console.error("Error getting mock upload URL for video:", err);
+        setVideoFileStatus(t('uploadError', 'خطا در پردازش فایل: ') + err.message);
+      }
+    }
   };
 
   // Submit Handlers
@@ -302,8 +329,15 @@ const ManageCourseContentPage: React.FC = () => {
             {/* MUI: <TextField fullWidth margin="dense" multiline rows={3} label={t('content', 'محتوا (متن/Markdown)')} name="content" value={currentLesson.content || ''} onChange={handleLessonChange} /> */}
             <div style={{marginTop: '10px'}}><label>{t('content', 'محتوا (متن/Markdown)')}:</label><textarea name="content" value={currentLesson.content || ''} onChange={handleLessonChange} style={{width: '90%', minHeight: '60px'}} /></div>
 
-            {/* MUI: <TextField fullWidth margin="dense" label={t('videoUrl', 'آدرس ویدیو')} name="videoUrl" value={currentLesson.videoUrl || ''} onChange={handleLessonChange} /> */}
-            <div style={{marginTop: '10px'}}><label>{t('videoUrl', 'آدرس ویدیو')}:</label><input type="text" name="videoUrl" value={currentLesson.videoUrl || ''} onChange={handleLessonChange} style={{width: '90%'}} /></div>
+            {/* MUI: <TextField fullWidth margin="dense" label={t('videoUrl', 'آدرس ویدیو')} name="videoUrl" value={currentLesson.videoUrl || ''} onChange={handleLessonChange} placeholder={t('lessonForm.videoUrlPlaceholder', 'یا URL ویدیو را وارد کنید')} /> */}
+            <div style={{marginTop: '10px'}}><label>{t('videoUrl', 'آدرس ویدیو')}:</label><input type="text" name="videoUrl" value={currentLesson.videoUrl || ''} onChange={handleLessonChange} style={{width: '90%'}} placeholder={t('lessonForm.videoUrlPlaceholder', 'یا URL ویدیو را وارد کنید')} /></div>
+
+            {/* MUI: <Button component="label" variant="outlined" sx={{ my: 1 }}> {t('lessonForm.uploadVideoFile', 'آپلود فایل ویدیو')} <input type="file" hidden accept="video/*" onChange={handleVideoFileChange} /> </Button> {videoFileStatus && <Typography variant="caption" display="block">...</Typography>} */}
+            <div style={{marginTop: '10px'}}>
+                <label htmlFor="lessonVideoFile">{t('lessonForm.uploadVideoFile', 'یا فایل ویدیو را آپلود کنید')}:</label>
+                <input type="file" id="lessonVideoFile" name="lessonVideoFile" accept="video/*" onChange={handleVideoFileChange} style={{width: '90%', marginTop: '5px'}} />
+                {videoFileStatus && <p style={{fontSize: '0.9em', color: uploadingVideo ? 'blue' : (currentLesson.videoUrl?.includes('example.com') ? 'green' : 'red'), margin: '5px 0 0 0'}}>{videoFileStatus}</p>}
+            </div>
 
             {/* MUI: <TextField fullWidth margin="dense" type="number" label={t('duration', 'مدت زمان (دقیقه)')} name="duration" value={currentLesson.duration || 0} onChange={handleLessonChange} /> */}
             <div style={{marginTop: '10px'}}><label>{t('duration', 'مدت زمان (دقیقه)')}:</label><input type="number" name="duration" value={currentLesson.duration || 0} onChange={handleLessonChange} style={{width: '90%'}} /></div>

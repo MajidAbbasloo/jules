@@ -4,10 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation } from '@apollo/client'; // Added useMutation
 import {
     GET_COURSE_DETAILS_FOR_EDIT as GET_LEARNING_COURSE_DETAILS,
-    IS_ENROLLED_QUERY,
+    IS_ENROLLED_QUERY, // Still useful for initial gate-keeping
+    GET_MY_ENROLLMENT_FOR_COURSE, // New query for progress
     GET_QUESTIONS_FOR_LESSON
 } from '../../graphql/queries';
-import { ASK_QUESTION_MUTATION, POST_ANSWER_MUTATION } from '../../graphql/mutations';
+import {
+    ASK_QUESTION_MUTATION,
+    POST_ANSWER_MUTATION,
+    TOGGLE_LESSON_COMPLETED_MUTATION
+} from '../../graphql/mutations';
 import { useAuth } from '../../context/AuthContext';
 
 // MUI placeholder imports
@@ -59,27 +64,57 @@ const LearningPage: React.FC = () => {
   const { isAuthenticated, user, loading: authLoading } = useAuth();
 
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
-  const [isUserActuallyEnrolled, setIsUserActuallyEnrolled] = useState<boolean | null>(null);
+  const [isUserActuallyEnrolled, setIsUserActuallyEnrolled] = useState<boolean | null>(null); // From IS_ENROLLED_QUERY
+  const [enrollmentDetails, setEnrollmentDetails] = useState<{ progress: number, completedLessons: string[] } | null>(null);
 
-  // Query to check enrollment status (important for protecting content)
-  const { loading: checkingEnrollment, error: enrollmentErrorCheck, data: enrollmentData } = useQuery(IS_ENROLLED_QUERY, {
+  // 1. Check basic enrollment status (still useful for initial gating)
+  const { loading: checkingEnrollment, data: enrollmentStatusData } = useQuery(IS_ENROLLED_QUERY, {
     variables: { courseId },
-    skip: !isAuthenticated || !user || !courseId, // Skip if not logged in or no courseId
+    skip: !isAuthenticated || !user || !courseId,
     onCompleted: (data) => {
-        if (user?.role === 'STUDENT') {
-            setIsUserActuallyEnrolled(data.isEnrolled);
-        } else if (user?.role === 'INSTRUCTOR' || user?.role === 'ADMIN') {
-            setIsUserActuallyEnrolled(true); // Instructors/Admins can always view
-        }
+      if (user?.role === 'STUDENT') setIsUserActuallyEnrolled(data.isEnrolled);
+      else if (isInstructorOrAdmin) setIsUserActuallyEnrolled(true);
     },
-    fetchPolicy: 'network-only' // Ensure fresh check
+    fetchPolicy: 'network-only'
   });
 
-  // Query for course details
+  // 2. Fetch detailed enrollment data (progress, completedLessons) if enrolled
+  const { loading: loadingEnrollmentDetails, data: enrollmentDetailsData, refetch: refetchEnrollmentDetails } = useQuery(GET_MY_ENROLLMENT_FOR_COURSE, {
+    variables: { courseId },
+    skip: !courseId || !isUserActuallyEnrolled || user?.role !== 'STUDENT', // Only fetch if student and confirmed enrolled
+    onCompleted: (data) => {
+      if (data?.getMyEnrollmentForCourse) {
+        setEnrollmentDetails({
+          progress: data.getMyEnrollmentForCourse.progress,
+          completedLessons: data.getMyEnrollmentForCourse.completedLessons || []
+        });
+      }
+    },
+    fetchPolicy: 'cache-and-network'
+  });
+
+  // 3. Query for course details (structure)
   const { loading: courseLoading, error: courseError, data: courseData } = useQuery<{ getCourseById: Course }>(GET_LEARNING_COURSE_DETAILS, {
     variables: { id: courseId },
-    skip: !courseId || isUserActuallyEnrolled === null, // Skip if courseId not present or enrollment not yet checked
+    skip: !courseId || (user?.role === 'STUDENT' && isUserActuallyEnrolled === null), // Wait for enrollment check for students
   });
+
+  const [toggleLessonCompleted, { loading: togglingLessonCompletion }] = useMutation(TOGGLE_LESSON_COMPLETED_MUTATION, {
+    onCompleted: (data) => {
+        // Update local state for enrollmentDetails to reflect changes immediately
+        if (data?.toggleLessonCompleted) {
+            setEnrollmentDetails({
+                progress: data.toggleLessonCompleted.progress,
+                completedLessons: data.toggleLessonCompleted.completedLessons || []
+            });
+        }
+        // refetchEnrollmentDetails(); // Or update cache manually for better UX
+    },
+    onError: (error) => {
+        alert(t('learningPage.errorMarkingLesson', 'خطا در بروزرسانی وضعیت درس: ') + error.message);
+    }
+});
+
 
   useEffect(() => {
     if (courseData?.getCourseById && courseData.getCourseById.sections.length > 0 && courseData.getCourseById.sections[0].lessons.length > 0) {
@@ -100,32 +135,29 @@ const LearningPage: React.FC = () => {
   }, [authLoading, checkingEnrollment, isAuthenticated, user, isUserActuallyEnrolled, courseId, navigate, t]);
 
 
-  if (authLoading || checkingEnrollment || courseLoading || isUserActuallyEnrolled === null && isAuthenticated && user?.role === 'STUDENT' ) {
-    // MUI: <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>
+  const handleToggleLessonComplete = (lessonId: string, currentCompletedStatus: boolean) => {
+    if (!courseId) return;
+    toggleLessonCompleted({
+        variables: { lessonId, courseId, completed: !currentCompletedStatus }
+    });
+  };
+
+  // Combined loading state check
+  if (authLoading || courseLoading || checkingEnrollment || (isAuthenticated && user?.role === 'STUDENT' && isUserActuallyEnrolled === null) || (isUserActuallyEnrolled && user?.role === 'STUDENT' && loadingEnrollmentDetails && !enrollmentDetails) ) {
     return <p>{t('loading', 'در حال بارگذاری...')}</p>;
   }
 
-  if (courseError) {
-    // MUI: <Alert severity="error">{t('errorLoading', 'خطا در بارگذاری دوره: ')} {courseError.message}</Alert>
-    return <p>{t('errorLoading', 'خطا در بارگذاری دوره: ')} {courseError.message}</p>;
-  }
-   if (enrollmentErrorCheck && user?.role === 'STUDENT') {
-    // MUI: <Alert severity="error">{t('learningPage.enrollmentCheckError', 'خطا در بررسی وضعیت ثبت نام: ')} {enrollmentErrorCheck.message}</Alert>
-    return <p>{t('learningPage.enrollmentCheckError', 'خطا در بررسی وضعیت ثبت نام: ')} {enrollmentErrorCheck.message}</p>;
-  }
-  if (!courseData?.getCourseById) {
-    // MUI: <Alert severity="warning">{t('courseDetails.notFound', 'دوره یافت نشد.')}</Alert>
-    return <p>{t('courseDetails.notFound', 'دوره یافت نشد.')}</p>;
-  }
+  if (courseError) return <p>{t('errorLoading', 'خطا در بارگذاری دوره: ')} {courseError.message}</p>;
+  // enrollmentStatusData.error is not explicitly handled, IS_ENROLLED_QUERY errors are logged
+  if (!courseData?.getCourseById) return <p>{t('courseDetails.notFound', 'دوره یافت نشد.')}</p>;
 
-  // If a student is definitely not enrolled (and not loading), they should have been redirected.
-  // This is an additional safeguard.
   if (user?.role === 'STUDENT' && isUserActuallyEnrolled === false) {
+     // This should ideally be caught by the useEffect redirect, but as a fallback:
     return <p>{t('learningPage.accessDenied', 'دسترسی به این محتوا امکان پذیر نمی باشد.')}</p>;
   }
 
-
   const course = courseData.getCourseById;
+  const completedLessonsSet = new Set(enrollmentDetails?.completedLessons || []);
 
   const handleLessonClick = (lesson: Lesson) => {
     if (isUserActuallyEnrolled || lesson.isPreviewable) {
@@ -216,24 +248,47 @@ const LearningPage: React.FC = () => {
       <aside style={sidebarStyle}>
         {/* MUI: <Typography variant="h5" gutterBottom>{course.title}</Typography> */}
         <h3>{course.title}</h3>
+        {isUserActuallyEnrolled && enrollmentDetails && user?.role === 'STUDENT' && (
+            // MUI: <Box sx={{my:1}}> <Typography variant="caption">{t('progress', 'پیشرفت')}:</Typography> <LinearProgress variant="determinate" value={enrollmentDetails.progress} /> <Typography variant="caption">{enrollmentDetails.progress.toFixed(0)}%</Typography> </Box>
+            <div style={{margin: '10px 0'}}>
+                <p>{t('progress', 'پیشرفت')}: {enrollmentDetails.progress.toFixed(0)}%</p>
+                {/* Basic progress bar */}
+                <div style={{height: '10px', backgroundColor: '#e0e0e0', borderRadius: '5px', overflow: 'hidden'}}>
+                    <div style={{width: `${enrollmentDetails.progress}%`, height: '100%', backgroundColor: '#4caf50'}}></div>
+                </div>
+            </div>
+        )}
         {/* MUI: <List component="nav" dense> */}
         {course.sections.sort((a,b) => a.order - b.order).map(section => (
           <div key={section.id} style={{marginBottom: '10px'}}>
             {/* MUI: <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mt: 1, mb: 0.5, px: 1 }}>{section.title}</Typography> */}
             <h4 style={{paddingLeft: '10px'}}>{section.title}</h4>
             {/* MUI: <List component="div" disablePadding dense> */}
-            {section.lessons.sort((a,b) => a.order - b.order).map(lesson => (
-              // MUI: <ListItemButton key={lesson.id} selected={selectedLesson?.id === lesson.id} onClick={() => handleLessonClick(lesson)} disabled={!isUserActuallyEnrolled && !lesson.isPreviewable}> <ListItemText primary={lesson.title} secondary={lesson.isPreviewable ? t('preview', 'پیش نمایش') : ''} /> </ListItemButton>
-              <div
-                key={lesson.id}
-                style={selectedLesson?.id === lesson.id ? activeLessonStyle : lessonListItemStyle}
-                onClick={() => handleLessonClick(lesson)}
-                title={(!isUserActuallyEnrolled && !lesson.isPreviewable) ? t('learningPage.enrollToViewLesson', '') : lesson.title}
-              >
-                {lesson.title} {lesson.isPreviewable ? `(${t('preview', 'پیش نمایش')})` : ''}
-                {(!isUserActuallyEnrolled && !lesson.isPreviewable) && <span style={{fontSize: '0.8em', color: 'orange'}}> (🔒)</span>}
-              </div>
-            ))}
+            {section.lessons.sort((a,b) => a.order - b.order).map(lesson => {
+              const isCompleted = completedLessonsSet.has(lesson.id);
+              return (
+                // MUI: <ListItemButton key={lesson.id} selected={selectedLesson?.id === lesson.id} onClick={() => handleLessonClick(lesson)} disabled={!isUserActuallyEnrolled && !lesson.isPreviewable}> <Checkbox checked={isCompleted} onChange={() => handleToggleLessonComplete(lesson.id, isCompleted)} size="small" edge="start" disabled={!isUserActuallyEnrolled || togglingLessonCompletion} /> <ListItemText primary={lesson.title} secondary={lesson.isPreviewable ? t('preview', 'پیش نمایش') : ''} /> </ListItemButton>
+                <div
+                  key={lesson.id}
+                  style={selectedLesson?.id === lesson.id ? activeLessonStyle : lessonListItemStyle}
+                  onClick={() => handleLessonClick(lesson)}
+                  title={(!isUserActuallyEnrolled && !lesson.isPreviewable) ? t('learningPage.enrollToViewLesson', '') : lesson.title}
+                >
+                  {isUserActuallyEnrolled && user?.role === 'STUDENT' && (
+                    <input
+                        type="checkbox"
+                        checked={isCompleted}
+                        onChange={() => handleToggleLessonComplete(lesson.id, isCompleted)}
+                        disabled={togglingLessonCompletion}
+                        style={{marginRight: '8px', cursor: 'pointer'}}
+                        onClick={(e) => e.stopPropagation()} // Prevent lesson selection when clicking checkbox
+                    />
+                  )}
+                  {lesson.title} {lesson.isPreviewable ? `(${t('preview', 'پیش نمایش')})` : ''}
+                  {(!isUserActuallyEnrolled && !lesson.isPreviewable) && <span style={{fontSize: '0.8em', color: 'orange'}}> (🔒)</span>}
+                </div>
+              );
+            })}
             {/* MUI: </List> */}
           </div>
         ))}
@@ -247,19 +302,48 @@ const LearningPage: React.FC = () => {
             {/* MUI: <Typography variant="h4" component="h2" gutterBottom>{selectedLesson.title}</Typography> */}
             <h2>{selectedLesson.title}</h2>
             {selectedLesson.videoUrl ? (
-              <div style={{ margin: '20px 0', position: 'relative', paddingTop: '56.25%' /* 16:9 Aspect Ratio */ }}>
-                {/* MUI: Would use a proper video player component e.g. ReactPlayer
-                    <ReactPlayer url={selectedLesson.videoUrl} width="100%" height="100%" controls style={{ position: 'absolute', top: 0, left: 0 }} />
-                */}
-                <iframe
-                    src={selectedLesson.videoUrl.includes("youtube.com/embed") ? selectedLesson.videoUrl : `https://www.youtube.com/embed/${selectedLesson.videoUrl.split('v=')[1]}`} // Basic YouTube embed logic
-                    title={selectedLesson.title}
-                    frameBorder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-                ></iframe>
-              </div>
+              () => {
+                const videoUrl = selectedLesson.videoUrl as string; // Ensure type for string methods
+                if (videoUrl.includes('example.com/uploads/placeholder-')) {
+                  // MUI: <Alert severity="info">{t('learningPage.videoPlaceholderNotice', 'این یک ویدیو آزمایشی است. در نسخه اصلی، ویدیوی واقعی اینجا نمایش داده خواهد شد.')}</Alert>
+                  return <p style={{ padding: '20px', backgroundColor: '#fff3cd', border: '1px solid #ffeeba', color: '#856404', borderRadius: '5px' }}>{t('learningPage.videoPlaceholderNotice', 'این یک ویدیو آزمایشی است. در نسخه اصلی، ویدیوی واقعی اینجا نمایش داده خواهد شد.')} <br/> URL: {videoUrl}</p>;
+                } else if (videoUrl.match(/\.(jpeg|jpg|gif|png)$/) != null) {
+                  // Not a video, but an image link was provided in videoUrl
+                  // MUI: <Box sx={{textAlign: 'center', my: 2}}><img src={videoUrl} alt={t('learningPage.lessonMaterial', 'محتوای درس')} style={{maxWidth: '100%', maxHeight: '500px', borderRadius: '5px'}} /></Box>
+                  return <img src={videoUrl} alt={t('learningPage.lessonMaterial', 'محتوای درس')} style={{maxWidth: '100%', maxHeight: '500px', borderRadius: '5px', margin: '20px 0'}} />;
+                } else if (videoUrl.match(/\.(mp4|webm|ogg)$/) != null) {
+                  // Direct video file
+                  // MUI: <Box sx={{my: 2}}><video controls width="100%" src={videoUrl} style={{borderRadius: '5px'}}>...</video></Box>
+                  return (
+                    <video controls width="100%" src={videoUrl} style={{borderRadius: '5px', margin: '20px 0', outline: 'none'}}>
+                      {t('learningPage.videoNotSupported', 'مرورگر شما از پخش این ویدیو پشتیبانی نمی‌کند.')}
+                    </video>
+                  );
+                } else if (videoUrl.includes("youtube.com/watch?v=") || videoUrl.includes("youtu.be/")) {
+                  const videoId = videoUrl.includes("youtu.be/")
+                                  ? videoUrl.split('youtu.be/')[1].split('?')[0]
+                                  : videoUrl.split('v=')[1].split('&')[0];
+                  const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+                   // MUI: <Box sx={{my: 2, position: 'relative', paddingTop: '56.25%'}}> <iframe ... /> </Box>
+                  return (
+                    <div style={{ margin: '20px 0', position: 'relative', paddingTop: '56.25%' /* 16:9 Aspect Ratio */ }}>
+                      <iframe
+                          src={embedUrl}
+                          title={selectedLesson.title}
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                      ></iframe>
+                    </div>
+                  );
+                } else {
+                  // Default to iframe for other URLs, or show a link
+                  // MUI: <Typography sx={{my:2}}>{t('learningPage.externalVideoLink', 'لینک ویدیو')}: <Link href={videoUrl} target="_blank" rel="noopener noreferrer">{videoUrl}</Link></Typography>
+                  return <p>{t('learningPage.externalVideoLink', 'لینک ویدیو')}: <a href={videoUrl} target="_blank" rel="noopener noreferrer">{videoUrl}</a></p>;
+                }
+              }
+            )()
             ) : (
               // MUI: <Typography variant="body1" paragraph sx={{ whiteSpace: 'pre-wrap', mt: 2 }}>{selectedLesson.content || t('learningPage.noContent', 'محتوایی برای این درس وجود ندارد.')}</Typography>
               <p style={{whiteSpace: 'pre-wrap', marginTop: '15px'}}>{selectedLesson.content || t('learningPage.noContent', 'محتوایی برای این درس وجود ندارد.')}</p>

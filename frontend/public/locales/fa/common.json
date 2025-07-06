@@ -237,5 +237,18 @@
   "reviews.submitSuccess": "نظر شما با موفقیت ثبت شد.",
   "reviews.submitErrorGeneric": "خطا در ارسال نظر.",
   "reviews.ratingRequired": "امتیاز دادن الزامی است.",
-  "rating": "امتیاز"
+  "rating": "امتیاز",
+  "uploadingFile": "در حال پردازش فایل...",
+  "fileSelected": "فایل انتخاب شد: ",
+  "mockUrlNotice": " (URL شبیه‌سازی شده)",
+  "uploadError": "خطا در پردازش فایل: ",
+  "manageCourses.form.thumbnailUrlPlaceholder": "یا URL تصویر را وارد کنید",
+  "manageCourses.form.thumbnailFile": "یا فایل تصویر بند انگشتی را آپلود کنید",
+  "lessonForm.videoUrlPlaceholder": "یا URL ویدیو را وارد کنید",
+  "lessonForm.uploadVideoFile": "یا فایل ویدیو را آپلود کنید",
+  "learningPage.videoPlaceholderNotice": "این یک ویدیو آزمایشی است. در نسخه اصلی، ویدیوی واقعی اینجا نمایش داده خواهد شد.",
+  "learningPage.lessonMaterial": "محتوای درس",
+  "learningPage.videoNotSupported": "مرورگر شما از پخش این ویدیو پشتیبانی نمی‌کند.",
+  "learningPage.externalVideoLink": "لینک ویدیو",
+  "learningPage.errorMarkingLesson": "خطا در بروزرسانی وضعیت درس: "
 }

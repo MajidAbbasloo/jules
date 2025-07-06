@@ -9,7 +9,8 @@ import {
   UPDATE_COURSE_MUTATION,
   DELETE_COURSE_MUTATION,
   PUBLISH_COURSE_MUTATION,
-  UNPUBLISH_COURSE_MUTATION
+  UNPUBLISH_COURSE_MUTATION,
+  GET_MOCK_UPLOAD_URL_MUTATION
 } from '../../../graphql/mutations';
 
 // import Button from '@mui/material/Button';
@@ -106,6 +107,8 @@ const ManageCoursesPage: React.FC = () => {
   const [deleteCourseMutation] = useMutation(DELETE_COURSE_MUTATION);
   const [publishCourseMutation] = useMutation(PUBLISH_COURSE_MUTATION);
   const [unpublishCourseMutation] = useMutation(UNPUBLISH_COURSE_MUTATION);
+  const [getMockUploadUrl, { loading: uploadingThumbnail }] = useMutation(GET_MOCK_UPLOAD_URL_MUTATION);
+  const [thumbnailFileStatus, setThumbnailFileStatus] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -131,6 +134,7 @@ const ManageCoursesPage: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setCurrentCourse(null);
+    setThumbnailFileStatus(null); // Reset file status on modal close
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -141,6 +145,26 @@ const ManageCoursesPage: React.FC = () => {
         setFormState(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
     } else {
         setFormState(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleThumbnailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setThumbnailFileStatus(t('uploadingFile', 'در حال پردازش فایل...'));
+      try {
+        const response = await getMockUploadUrl({ variables: { filename: file.name, fileType: file.type } });
+        const mockUrl = response.data?.getMockUploadUrl;
+        if (mockUrl) {
+          setFormState(prev => ({ ...prev, thumbnailUrl: mockUrl }));
+          setThumbnailFileStatus(t('fileSelected', 'فایل انتخاب شد: ') + file.name + t('mockUrlNotice', ' (URL شبیه‌سازی شده)'));
+        } else {
+          setThumbnailFileStatus(t('uploadError', 'خطا در دریافت URL شبیه‌سازی شده.'));
+        }
+      } catch (err: any) {
+        console.error("Error getting mock upload URL:", err);
+        setThumbnailFileStatus(t('uploadError', 'خطا در پردازش فایل: ') + err.message);
+      }
     }
   };
 
@@ -234,10 +258,17 @@ const ManageCoursesPage: React.FC = () => {
             <label>{t('manageCourses.form.price', 'قیمت (0 برای رایگان)')}:</label>
             <input type="number" name="price" value={formState.price || 0} onChange={handleChange} style={{width: '98%'}} />
           </div>
-          {/* MUI: <TextField fullWidth label={t('manageCourses.form.thumbnailUrl', 'URL تصویر بند انگشتی')} name="thumbnailUrl" value={formState.thumbnailUrl || ''} onChange={handleChange} /> */}
+          {/* MUI: <TextField fullWidth label={t('manageCourses.form.thumbnailUrl', 'URL تصویر بند انگشتی')} name="thumbnailUrl" value={formState.thumbnailUrl || ''} onChange={handleChange} placeholder={t('manageCourses.form.thumbnailUrlPlaceholder', 'یا URL تصویر را وارد کنید')} /> */}
           <div style={{ marginBottom: '10px' }}>
             <label>{t('manageCourses.form.thumbnailUrl', 'URL تصویر بند انگشتی')}:</label>
-            <input type="text" name="thumbnailUrl" value={formState.thumbnailUrl || ''} onChange={handleChange} style={{width: '98%'}} />
+            <input type="text" name="thumbnailUrl" value={formState.thumbnailUrl || ''} onChange={handleChange} style={{width: '98%'}} placeholder={t('manageCourses.form.thumbnailUrlPlaceholder', 'یا URL تصویر را وارد کنید')} />
+          </div>
+           {/* File input for thumbnail */}
+          {/* MUI: <Button component="label" variant="outlined" sx={{ my: 1 }}> {t('manageCourses.form.thumbnailFile', 'آپلود تصویر بند انگشتی')} <input type="file" hidden accept="image/*" onChange={handleThumbnailChange} /> </Button> {thumbnailFileStatus && <Typography variant="caption" display="block">...</Typography>} */}
+          <div style={{ marginBottom: '10px' }}>
+            <label htmlFor="thumbnailFile">{t('manageCourses.form.thumbnailFile', 'یا فایل تصویر بند انگشتی را آپلود کنید')}:</label>
+            <input type="file" id="thumbnailFile" name="thumbnailFile" accept="image/*" onChange={handleThumbnailChange} style={{width: '98%', marginTop: '5px'}} />
+            {thumbnailFileStatus && <p style={{fontSize: '0.9em', color: uploadingThumbnail ? 'blue' : (formState.thumbnailUrl?.includes('example.com') ? 'green' : 'red'), margin: '5px 0 0 0'}}>{thumbnailFileStatus}</p>}
           </div>
           {/* MUI for tags: <TextField fullWidth label={t('manageCourses.form.tags', 'برچسب ها (جدا شده با ویرگول)')} name="tags" value={(formState.tags || []).join(', ')} onChange={handleChange} helperText="Enter tags separated by commas" /> */}
           <div style={{ marginBottom: '10px' }}>

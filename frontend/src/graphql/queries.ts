@@ -169,6 +169,7 @@ export const GET_MY_ENROLLED_COURSES = gql`
       id # Enrollment ID
       enrolledAt
       progress
+      completedLessons # Add this field
       course {
         id
         title
@@ -190,6 +191,40 @@ export const GET_MY_ENROLLED_COURSES = gql`
     }
   }
 `;
+
+export const GET_MY_ENROLLMENT_FOR_COURSE = gql`
+  query GetMyEnrollmentForCourse($courseId: ID!) {
+    # This query might not exist on backend, we might need to implement it
+    # or filter from getMyEnrolledCourses on client.
+    # For now, assuming it exists or will be added:
+    # getMyEnrollmentForCourse(courseId: $courseId) {
+    #   id
+    #   progress
+    #   completedLessons
+    # }
+    # Alternative: use isEnrolled and if true, then fetch getMyEnrolledCourses and filter.
+    # For robust solution, backend should provide this.
+    # For now, let's use a placeholder structure and adapt if needed.
+    # We'll actually rely on the IS_ENROLLED_QUERY and then fetch the specific enrollment data if needed,
+    # or better, ensure GET_MY_ENROLLED_COURSES is used and we find the current course from its result.
+    # To keep it simple for now, I will fetch all enrolled courses and filter.
+    # The LearningPage already has IS_ENROLLED_QUERY.
+    # We'll fetch the *specific* enrollment for progress.
+    # A new backend query `getMyEnrollment(courseId: ID!)` would be best.
+
+    # Let's define what the ideal new query would look like,
+    # and the backend would need to implement it.
+    # For now, the LearningPage will use IS_ENROLLED_QUERY and then
+    # this new query if the user is enrolled.
+    getMyEnrollmentForCourse(courseId: $courseId) { # Assumes this new query on backend
+        id
+        progress
+        completedLessons
+        completedAt
+    }
+  }
+`;
+
 
 export const GET_INSTRUCTOR_COURSES = gql`
   query GetInstructorCourses($instructorId: ID!) {

@@ -144,8 +144,10 @@ model Enrollment {
   courseId      String
   course        Course    @relation(fields: [courseId], references: [id])
   enrolledAt    DateTime  @default(now())
-  progress      Float?    @default(0) // e.g., percentage completion
+  progress      Float     @default(0) // Percentage completion, e.g., 0.0 to 100.0
+  completedLessons String[]  @default([]) // Array of completed Lesson IDs
   completedAt   DateTime?
+
 
   @@unique([userId, courseId]) // A user can only enroll in a course once
   @@index([userId])

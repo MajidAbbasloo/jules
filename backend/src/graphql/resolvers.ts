@@ -548,6 +548,26 @@ export const resolvers = {
         });
         return !!enrollment;
     },
+    getMyEnrollmentForCourse: async (_parent: any, { courseId }: { courseId: string }, context: Context) => {
+        if (!context.user) {
+            // Or throw AuthenticationError if enrollment info is sensitive even for existence check
+            return null;
+        }
+        return context.prisma.enrollment.findUnique({
+            where: {
+                userId_courseId: {
+                    userId: context.user.id,
+                    courseId: courseId,
+                },
+            },
+            // Include whatever fields the client needs, e.g., progress, completedLessons
+            include: {
+                course: { // Minimal course info, or specific fields if needed
+                    select: { id: true, title: true }
+                }
+            }
+        });
+    },
     getAllUsers: async (_parent: any, _args: any, context: Context) => {
       if (!context.user || context.user.role !== UserRole.ADMIN) {
         throw new ForbiddenError('Access denied. Admin role required.');
@@ -765,6 +785,81 @@ export const resolvers = {
           comment,
         },
         include: { user: { include: { profile: true } }, course: true }
+      });
+    }
+
+    getMockUploadUrl: async (_parent: any, { filename, fileType }: { filename: string, fileType: string }, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('You must be logged in to get an upload URL.');
+      }
+      // In a real application, this would:
+      // 1. Validate filename and fileType.
+      // 2. Potentially generate a unique filename or path.
+      // 3. Interact with a cloud storage service (S3, GCS, Azure Blob) to get a presigned URL for upload.
+      // 4. Or, if uploading directly to server first, prepare a path.
+
+      // For this mock, we just return a placeholder URL.
+      const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, ''); // Basic sanitization
+      const mockUrl = `https://example.com/uploads/placeholder-${Date.now()}-${sanitizedFilename}`;
+      console.log(`Mock URL generated for ${filename} (type: ${fileType}): ${mockUrl}`);
+      return mockUrl;
+    },
+
+    toggleLessonCompleted: async (
+      _parent: any,
+      { lessonId, courseId, completed }: { lessonId: string, courseId: string, completed: boolean },
+      context: Context
+    ) => {
+      if (!context.user) {
+        throw new AuthenticationError('Not authenticated.');
+      }
+
+      // 1. Verify enrollment
+      const enrollment = await context.prisma.enrollment.findUnique({
+        where: { userId_courseId: { userId: context.user.id, courseId: courseId } },
+        include: { course: { include: { sections: { include: { lessons: true } } } } } // Include all lessons for progress calc
+      });
+
+      if (!enrollment) {
+        throw new ForbiddenError('You are not enrolled in this course.');
+      }
+
+      // 2. Verify lesson exists in the course (optional, but good for data integrity)
+      const lessonExistsInCourse = enrollment.course.sections.some(section =>
+        section.lessons.some(lesson => lesson.id === lessonId)
+      );
+      if (!lessonExistsInCourse) {
+        throw new UserInputError('Lesson not found in this course.');
+      }
+
+      // 3. Update completedLessons array
+      let updatedCompletedLessons = [...enrollment.completedLessons];
+      if (completed) { // Mark as completed
+        if (!updatedCompletedLessons.includes(lessonId)) {
+          updatedCompletedLessons.push(lessonId);
+        }
+      } else { // Mark as incomplete
+        updatedCompletedLessons = updatedCompletedLessons.filter(id => id !== lessonId);
+      }
+
+      // 4. Recalculate progress
+      const totalLessonsInCourse = enrollment.course.sections.reduce((count, section) => count + section.lessons.length, 0);
+      const newProgress = totalLessonsInCourse > 0
+        ? (updatedCompletedLessons.length / totalLessonsInCourse) * 100
+        : 0;
+
+      // 5. Update enrollment record
+      return context.prisma.enrollment.update({
+        where: { id: enrollment.id },
+        data: {
+          completedLessons: updatedCompletedLessons,
+          progress: parseFloat(newProgress.toFixed(2)), // Store with 2 decimal places
+          completedAt: newProgress >= 100 ? new Date() : null // Mark course completed if 100%
+        },
+        include: {
+            user: { include: { profile: true } },
+            course: true // Or more detailed course if needed by client on this mutation
+        }
       });
     }
   },

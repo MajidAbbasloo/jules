@@ -237,5 +237,18 @@
   "reviews.submitSuccess": "Your review has been submitted successfully.",
   "reviews.submitErrorGeneric": "Error submitting review.",
   "reviews.ratingRequired": "Rating is required.",
-  "rating": "Rating"
+  "rating": "Rating",
+  "uploadingFile": "Processing file...",
+  "fileSelected": "File selected: ",
+  "mockUrlNotice": " (Mock URL)",
+  "uploadError": "Error processing file: ",
+  "manageCourses.form.thumbnailUrlPlaceholder": "Or enter image URL",
+  "manageCourses.form.thumbnailFile": "Or upload thumbnail image file",
+  "lessonForm.videoUrlPlaceholder": "Or enter video URL",
+  "lessonForm.uploadVideoFile": "Or upload video file",
+  "learningPage.videoPlaceholderNotice": "This is a placeholder video. In the final version, the actual video will be displayed here.",
+  "learningPage.lessonMaterial": "Lesson Material",
+  "learningPage.videoNotSupported": "Your browser does not support the video tag.",
+  "learningPage.externalVideoLink": "Video Link",
+  "learningPage.errorMarkingLesson": "Error updating lesson status: "
 }

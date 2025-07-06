@@ -85,7 +85,8 @@ export const typeDefs = gql`
     user: User!
     course: Course!
     enrolledAt: DateTime!
-    progress: Float
+    progress: Float! # Make progress non-nullable, defaults to 0
+    completedLessons: [ID!]! # List of completed lesson IDs
     completedAt: DateTime
   }
 
@@ -239,6 +240,9 @@ export const typeDefs = gql`
     getAllUsers: [User!] # Admin access
     getAllCoursesForAdmin(publishedOnly: Boolean): [Course!] # Admin access, optional filter
 
+    # Enrollment specific query for a user
+    getMyEnrollmentForCourse(courseId: ID!): Enrollment # Returns single enrollment or null
+
     # Q&A Queries
     getQuestionsForLesson(lessonId: ID!): [Question!]
   }
@@ -287,5 +291,11 @@ export const typeDefs = gql`
     # deleteQuestion(id: ID!): Boolean
     # editAnswer(id: ID!, content: String): Answer
     # deleteAnswer(id: ID!): Boolean
+
+    # Mock File Upload
+    getMockUploadUrl(filename: String!, fileType: String!): String!
+
+    # Progress Tracking
+    toggleLessonCompleted(lessonId: ID!, courseId: ID!, completed: Boolean!): Enrollment!
   }
 `;

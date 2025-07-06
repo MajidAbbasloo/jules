@@ -96,7 +96,13 @@ const StudentDashboardPage: React.FC = () => {
                 {/* MUI: <Typography variant="body2" color="text.secondary"> {course.category?.name || ''} </Typography> */}
                 <p style={{fontSize: '0.9em', color: 'gray'}}>{course.category?.name || ''}</p>
                 {/* MUI: {progress !== null && <LinearProgress variant="determinate" value={progress} sx={{my:1}} />} <Typography variant="caption">{t('progress', 'پیشرفت')}: {progress || 0}%</Typography> */}
-                <p>{t('progress', 'پیشرفت')}: {progress || 0}%</p>
+                <div style={{margin: '5px 0'}}>
+                    <span style={{fontSize: '0.9em'}}>{t('progress', 'پیشرفت')}: {progress ? progress.toFixed(0) : 0}%</span>
+                    {/* Basic progress bar */}
+                    <div style={{height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden', marginTop: '3px'}}>
+                        <div style={{width: `${progress || 0}%`, height: '100%', backgroundColor: '#4caf50'}}></div>
+                    </div>
+                </div>
               </div>
               {/* MUI: </CardContent> */}
               {/* MUI: <CardActions> <Button component={Link} to={`/learn/course/${course.id}`} size="small" variant="contained">{t('studentDashboard.startLearning', 'شروع یادگیری')}</Button> </CardActions> */}

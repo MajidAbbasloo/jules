@@ -19,6 +19,28 @@ export const LOGIN_MUTATION = gql`
   }
 `;
 
+// --- Progress Tracking Mutation ---
+export const TOGGLE_LESSON_COMPLETED_MUTATION = gql`
+  mutation ToggleLessonCompleted($lessonId: ID!, $courseId: ID!, $completed: Boolean!) {
+    toggleLessonCompleted(lessonId: $lessonId, courseId: $courseId, completed: $completed) {
+      id # Enrollment ID
+      progress
+      completedLessons
+      completedAt
+      course { # Include course for context or if needed for cache updates
+        id
+      }
+    }
+  }
+`;
+
+// --- File Upload Mutation (Mock) ---
+export const GET_MOCK_UPLOAD_URL_MUTATION = gql`
+  mutation GetMockUploadUrl($filename: String!, $fileType: String!) {
+    getMockUploadUrl(filename: $filename, fileType: $fileType)
+  }
+`;
+
 // --- Review Mutations ---
 export const SUBMIT_REVIEW_MUTATION = gql`
   mutation SubmitReview($courseId: ID!, $rating: Int!, $comment: String) {
