@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation } from '@apollo/client';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext'; // Import useNotification
 import { REGISTER_MUTATION } from '../../graphql/mutations';
 import { useTranslation } from 'react-i18next';
 
@@ -15,40 +16,41 @@ enum ClientUserRole {
 const SignupPage: React.FC = () => {
   const { t } = useTranslation();
   const { login: authLogin } = useAuth();
+  const { addNotification } = useNotification(); // Use notification hook
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  // const [role, setRole] = useState<ClientUserRole>(ClientUserRole.STUDENT); // Default role
-  const [error, setError] = useState('');
+  // const [error, setError] = useState(''); // Removed
 
   const [registerUser, { loading }] = useMutation(REGISTER_MUTATION, {
     onCompleted: (data) => {
       const { token, user } = data.register;
-      authLogin(token, user); // Update auth context after registration
-      // Redirect based on role, typically to student dashboard or a welcome/verify email page
-      navigate('/dashboard/student'); // Or a more appropriate page like /verify-email
+      authLogin(token, user);
+      addNotification(t('signup.success', 'ثبت نام با موفقیت انجام شد! به داشبورد خود هدایت می‌شوید.'), 'success');
+      navigate('/dashboard/student');
     },
     onError: (apolloError) => {
-      // TODO: Replace with toast notification - e.g., toast.error(apolloError.message || t('signup.failed'));
-      setError(apolloError.message || t('signup.failed'));
+      addNotification(apolloError.message || t('signup.failed'), 'error');
+      // setError(apolloError.message || t('signup.failed')); // Removed
     }
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    // setError(''); // Removed
     if (password !== confirmPassword) {
-      setError(t('signup.passwordsDoNotMatch', 'رمزهای عبور یکسان نیستند.'));
+      addNotification(t('signup.passwordsDoNotMatch', 'رمزهای عبور یکسان نیستند.'), 'error');
+      // setError(t('signup.passwordsDoNotMatch', 'رمزهای عبور یکسان نیستند.')); // Removed
       return;
     }
     if (!email || !password) {
-      setError(t('signup.emailPasswordRequired', 'ایمیل و رمز عبور الزامی است.'));
+      addNotification(t('signup.emailPasswordRequired', 'ایمیل و رمز عبور الزامی است.'), 'error');
+      // setError(t('signup.emailPasswordRequired', 'ایمیل و رمز عبور الزامی است.')); // Removed
       return;
     }
-    // Role is not typically set by user during public signup, defaults on backend
     try {
       await registerUser({ variables: { email, password, firstName, lastName /* role: role */ } });
     } catch (err) {
@@ -141,7 +143,7 @@ const SignupPage: React.FC = () => {
         </div>
         {/* Role selection typically not for public signup */}
         {/* MUI: {error && <Alert severity="error" sx={{ width: '100%', mt: 1 }}>{error}</Alert>} */}
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {/* {error && <p style={{ color: 'red' }}>{error}</p>} Removed inline error display */}
         {/* MUI:
             <Button type="submit" fullWidth variant="contained" sx={{ mt: 3, mb: 2 }} disabled={loading}>
               {loading ? <CircularProgress size={24} /> : t('signup.submitButton', 'ثبت نام')}

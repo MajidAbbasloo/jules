@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../context/AuthContext'; // Corrected path
 import { useQuery } from '@apollo/client';
 import { Link } from 'react-router-dom';
-import { GET_MY_ENROLLED_COURSES } from '../../../graphql/queries';
+import { GET_MY_ENROLLED_COURSES, GET_MY_BOOKMARKED_LESSONS } from '../../../graphql/queries';
 
 interface EnrolledCourse {
   id: string; // Enrollment ID
@@ -29,15 +29,37 @@ interface EnrolledCourse {
 const StudentDashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'enrolled' | 'bookmarks'>('enrolled');
 
-  const { loading, error, data } = useQuery<{ getMyEnrolledCourses: EnrolledCourse[] }>(GET_MY_ENROLLED_COURSES, {
-    skip: !user, // Skip if user is not logged in
+
+  const { loading: enrolledLoading, error: enrolledError, data: enrolledData } = useQuery<{ getMyEnrolledCourses: EnrolledCourse[] }>(GET_MY_ENROLLED_COURSES, {
+    skip: !user,
   });
 
-  if (loading) return <p>{t('loading', 'در حال بارگذاری دوره های شما...')}</p>;
-  if (error) return <p>{t('studentDashboard.errorLoadingCourses', 'خطا در بارگذاری دوره های ثبت نام شده: ')} {error.message}</p>;
+  const { loading: bookmarksLoading, error: bookmarksError, data: bookmarksData } = useQuery(GET_MY_BOOKMARKED_LESSONS, {
+    skip: !user,
+  });
 
-  const enrolledCourses = data?.getMyEnrolledCourses || [];
+  interface BookmarkedLesson {
+    id: string;
+    title: string;
+    section: {
+        id: string;
+        title: string;
+        course: {
+            id: string;
+            title: string;
+        }
+    }
+  }
+
+  if (enrolledLoading || bookmarksLoading) return <p>{t('loading', 'در حال بارگذاری اطلاعات شما...')}</p>;
+  if (enrolledError) return <p>{t('studentDashboard.errorLoadingCourses', 'خطا در بارگذاری دوره های ثبت نام شده: ')} {enrolledError.message}</p>;
+  if (bookmarksError) return <p>{t('studentDashboard.errorLoadingBookmarks', 'خطا در بارگذاری نشانک‌ها: ')} {bookmarksError.message}</p>;
+
+
+  const enrolledCourses = enrolledData?.getMyEnrolledCourses || [];
+  const bookmarkedLessons: BookmarkedLesson[] = bookmarksData?.getMyBookmarkedLessons || [];
 
   // Basic card style (similar to HomePage, can be centralized later)
   const cardStyle: React.CSSProperties = {
@@ -68,61 +90,85 @@ const StudentDashboardPage: React.FC = () => {
     <div>
       {/* MUI: <Typography variant="h4" gutterBottom>{t('studentDashboard.title', 'داشبورد دانش آموز')}</Typography> */}
       <h2>{t('studentDashboard.title', 'داشبورد دانش آموز')}</h2>
+      {/* MUI: <Typography variant="h4" gutterBottom>{t('studentDashboard.title', 'داشبورد دانش آموز')}</Typography> */}
+      <h2>{t('studentDashboard.title', 'داشبورد دانش آموز')}</h2>
       {/* MUI: {user && <Typography variant="h6" gutterBottom>{t('studentDashboard.welcome', 'خوش آمدید')}, {user.profile?.firstName || user.email}!</Typography>} */}
       {user && <p>{t('studentDashboard.welcome', 'خوش آمدید')}, {user.profile?.firstName || user.email}!</p>}
 
-      {/* MUI: <Button component={Link} to="/profile/me" variant="outlined" sx={{ my: 2 }}>{t('myProfile', 'پروفایل من')}</Button> */}
+      {/* MUI: <Box sx={{display: 'flex', gap: 2, my: 2}}> <Button component={Link} to="/profile/me" variant="outlined">{t('myProfile', 'پروفایل من')}</Button> </Box> */}
       <div style={{ margin: "15px 0" }}>
         <Link to="/profile/me" style={{ textDecoration: 'none', padding: '8px 15px', border: '1px solid #007bff', borderRadius: '4px', color: '#007bff' }}>
           {t('myProfile', 'پروفایل من')}
         </Link>
       </div>
 
-      {/* MUI: <Typography variant="h5" sx={{my: 2}}>{t('studentDashboard.myCoursesTitle', 'دوره های من')}</Typography> */}
-      <h3>{t('studentDashboard.myCoursesTitle', 'دوره های من')}</h3>
+      {/* MUI: <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{mb:2}}> <Tab label={t('studentDashboard.tabs.enrolled', 'دوره‌های من')} value="enrolled" /> <Tab label={t('studentDashboard.tabs.bookmarks', 'نشانک‌ها')} value="bookmarks" /> </Tabs> */}
+      <div style={{marginBottom: '20px', borderBottom: '1px solid #ccc'}}>
+        <button onClick={() => setActiveTab('enrolled')} style={{padding: '10px', border: activeTab === 'enrolled' ? '2px solid #007bff' : '1px solid #ccc', background: activeTab === 'enrolled' ? '#e7f3ff' : 'white', cursor: 'pointer'}}>
+            {t('studentDashboard.tabs.enrolled', 'دوره‌های من')}
+        </button>
+        <button onClick={() => setActiveTab('bookmarks')} style={{padding: '10px', border: activeTab === 'bookmarks' ? '2px solid #007bff' : '1px solid #ccc', background: activeTab === 'bookmarks' ? '#e7f3ff' : 'white', cursor: 'pointer', marginRight: '-1px'}}>
+            {t('studentDashboard.tabs.bookmarks', 'درس‌های نشانه‌گذاری شده')}
+        </button>
+      </div>
 
-      {enrolledCourses.length === 0 ? (
-        // MUI: <Typography>{t('studentDashboard.noCoursesEnrolled', 'شما هنوز در هیچ دوره ای ثبت نام نکرده اید.')}</Typography>
-        <p>{t('studentDashboard.noCoursesEnrolled', 'شما هنوز در هیچ دوره ای ثبت نام نکرده اید.')}</p>
-      ) : (
-        // MUI: <Grid container spacing={2}>
-        <div style={cardContainerStyle}>
-          {enrolledCourses.map(({ id: enrollmentId, course, progress }) => (
-            // MUI: <Grid item xs={12} sm={6} md={4} key={enrollmentId}> <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}> ... </Card> </Grid>
-            <div key={enrollmentId} style={cardStyle}>
-              {/* MUI: <CardMedia component="img" height="140" image={course.thumbnailUrl || '/placeholder.png'} alt={course.title} /> */}
-              <img
-                src={course.thumbnailUrl || '/placeholder-image.jpg'} // Provide a real placeholder
-                alt={course.title}
-                style={cardImageStyle}
-              />
-              {/* MUI: <CardContent sx={{ flexGrow: 1 }}> */}
-              <div>
-                {/* MUI: <Typography gutterBottom variant="h6" component="div">{course.title}</Typography> */}
-                <h4 style={{marginTop: '10px'}}>{course.title}</h4>
-                {/* MUI: <Typography variant="body2" color="text.secondary"> {course.category?.name || ''} </Typography> */}
-                <p style={{fontSize: '0.9em', color: 'gray'}}>{course.category?.name || ''}</p>
-                {/* MUI: {progress !== null && <LinearProgress variant="determinate" value={progress} sx={{my:1}} />} <Typography variant="caption">{t('progress', 'پیشرفت')}: {progress || 0}%</Typography> */}
-                <div style={{margin: '5px 0'}}>
-                    <span style={{fontSize: '0.9em'}}>{t('progress', 'پیشرفت')}: {progress ? progress.toFixed(0) : 0}%</span>
-                    {/* Basic progress bar */}
-                    <div style={{height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden', marginTop: '3px'}}>
-                        <div style={{width: `${progress || 0}%`, height: '100%', backgroundColor: '#4caf50'}}></div>
+      {activeTab === 'enrolled' && (
+        <section>
+          {/* MUI: <Typography variant="h5" sx={{my: 2}}>{t('studentDashboard.myCoursesTitle', 'دوره های من')}</Typography> */}
+          <h3>{t('studentDashboard.myCoursesTitle', 'دوره های من')}</h3>
+          {enrolledCourses.length === 0 ? (
+            <p>{t('studentDashboard.noCoursesEnrolled', 'شما هنوز در هیچ دوره ای ثبت نام نکرده اید.')}</p>
+          ) : (
+            <div style={cardContainerStyle}>
+              {enrolledCourses.map(({ id: enrollmentId, course, progress }) => (
+                <div key={enrollmentId} style={cardStyle}>
+                  <img src={course.thumbnailUrl || '/placeholder-image.jpg'} alt={course.title} style={cardImageStyle} />
+                  <div>
+                    <h4 style={{marginTop: '10px'}}>{course.title}</h4>
+                    <p style={{fontSize: '0.9em', color: 'gray'}}>{course.category?.name || ''}</p>
+                    <div style={{margin: '5px 0'}}>
+                        <span style={{fontSize: '0.9em'}}>{t('progress', 'پیشرفت')}: {progress ? progress.toFixed(0) : 0}%</span>
+                        <div style={{height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden', marginTop: '3px'}}>
+                            <div style={{width: `${progress || 0}%`, height: '100%', backgroundColor: '#4caf50'}}></div>
+                        </div>
                     </div>
+                  </div>
+                  <Link
+                    to={`/learn/course/${course.id}`}
+                    style={{ marginTop: '10px', display: 'block', textAlign: 'center', padding: '10px', backgroundColor: '#007bff', color: 'white', textDecoration: 'none', borderRadius: '0 0 4px 4px' }}
+                  >
+                    {t('studentDashboard.startLearning', 'شروع یادگیری')}
+                  </Link>
                 </div>
-              </div>
-              {/* MUI: </CardContent> */}
-              {/* MUI: <CardActions> <Button component={Link} to={`/learn/course/${course.id}`} size="small" variant="contained">{t('studentDashboard.startLearning', 'شروع یادگیری')}</Button> </CardActions> */}
-              <Link
-                to={`/learn/course/${course.id}`}
-                style={{ marginTop: '10px', display: 'block', textAlign: 'center', padding: '10px', backgroundColor: '#007bff', color: 'white', textDecoration: 'none', borderRadius: '0 0 4px 4px' }}
-              >
-                {t('studentDashboard.startLearning', 'شروع یادگیری')}
-              </Link>
+              ))}
             </div>
-          ))}
-        </div>
-        // MUI: </Grid>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'bookmarks' && (
+        <section>
+            {/* MUI: <Typography variant="h5" sx={{my: 2}}>{t('studentDashboard.myBookmarksTitle', 'درس‌های نشانه‌گذاری شده')}</Typography> */}
+            <h3>{t('studentDashboard.myBookmarksTitle', 'درس‌های نشانه‌گذاری شده')}</h3>
+            {bookmarkedLessons.length === 0 ? (
+                // MUI: <Typography>{t('studentDashboard.noBookmarks', 'شما هنوز هیچ درسی را نشانه‌گذاری نکرده‌اید.')}</Typography>
+                <p>{t('studentDashboard.noBookmarks', 'شما هنوز هیچ درسی را نشانه‌گذاری نکرده‌اید.')}</p>
+            ) : (
+                // MUI: <List> {bookmarkedLessons.map(lesson => <ListItemButton component={Link} to={`/learn/course/${lesson.section.course.id}?lesson=${lesson.id}`} key={lesson.id}> <ListItemText primary={lesson.title} secondary={`${t('course', 'دوره')}: ${lesson.section.course.title} - ${t('section', 'بخش')}: ${lesson.section.title}`} /> </ListItemButton> )} </List>
+                <ul style={{listStyleType: 'none', padding: 0}}>
+                    {bookmarkedLessons.map(lesson => (
+                        <li key={lesson.id} style={{padding: '10px', borderBottom: '1px solid #eee'}}>
+                            <Link to={`/learn/course/${lesson.section.course.id}?lesson=${lesson.id}`}>
+                                <strong>{lesson.title}</strong>
+                            </Link>
+                            <div style={{fontSize: '0.9em', color: 'gray'}}>
+                                {t('course', 'دوره')}: {lesson.section.course.title} - {t('section', 'بخش')}: {lesson.section.title}
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
       )}
     </div>
   );

@@ -294,6 +294,7 @@ const ManageCourseContentPage: React.FC = () => {
                    <div>
                     {/* MUI: <IconButton size="small" onClick={() => handleOpenLessonModal(section.id, lesson)}><EditIcon /></IconButton> */}
                     <button onClick={() => handleOpenLessonModal(section.id, lesson)} style={{marginRight: '5px'}}>{t('edit', 'ویرایش')}</button>
+                    <Link to={`/dashboard/instructor/course/${courseId}/lesson/${lesson.id}/quiz`} style={{marginRight: '5px', fontSize: '0.9em'}}>{t('manageQuiz', 'مدیریت آزمون')}</Link>
                     {/* MUI: <IconButton size="small" color="error" onClick={() => handleDeleteLesson(lesson.id)}><DeleteIcon /></IconButton> */}
                     <button onClick={() => handleDeleteLesson(lesson.id)} style={{color: 'red'}}>{t('delete', 'حذف')}</button>
                    </div>

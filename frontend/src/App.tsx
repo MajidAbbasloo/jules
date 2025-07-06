@@ -12,9 +12,11 @@ const StudentDashboardPage = React.lazy(() => import('./pages/Dashboards/Student
 const InstructorDashboardPage = React.lazy(() => import('./pages/Dashboards/InstructorDashboardPage'));
 const ManageCoursesPage = React.lazy(() => import('./pages/Dashboards/Instructor/ManageCoursesPage'));
 const ManageCourseContentPage = React.lazy(() => import('./pages/Dashboards/Instructor/ManageCourseContentPage'));
+const ManageLessonQuizPage = React.lazy(() => import('./pages/Dashboards/Instructor/ManageLessonQuizPage')); // New Import
 const LearningPage = React.lazy(() => import('./pages/Common/LearningPage'));
 const CategoryCoursesPage = React.lazy(() => import('./pages/Common/CategoryCoursesPage'));
-const UserProfilePage = React.lazy(() => import('./pages/User/UserProfilePage')); // New Import
+const UserProfilePage = React.lazy(() => import('./pages/User/UserProfilePage'));
+const TakeQuizPage = React.lazy(() => import('./pages/Student/TakeQuizPage')); // New Import
 const AdminDashboardPage = React.lazy(() => import('./pages/Dashboards/AdminDashboardPage'));
 const CourseDetailsPage = React.lazy(() => import('./pages/Common/CourseDetailsPage'));
 const NotFoundPage = React.lazy(() => import('./pages/Common/NotFoundPage'));
@@ -115,6 +117,7 @@ function App() {
                 <Route index element={ <div style={{padding: '10px', background: '#e9ecef', border: '1px solid #ced4da', borderRadius: '5px'}}>{t('instructorDashboard.welcomeText', 'به داشبورد خود خوش آمدید. برای مدیریت دوره ها، لینک بالا را انتخاب کنید.')}</div> } /> {/* Default content for /dashboard/instructor */}
                 <Route path="courses" element={<ManageCoursesPage />} />
                 <Route path="course/:courseId/content" element={<ManageCourseContentPage />} />
+                <Route path="course/:courseId/lesson/:lessonId/quiz" element={<ManageLessonQuizPage />} />
                 {/* Add more nested routes here e.g., analytics, profile */}
               </Route>
               <Route
@@ -137,6 +140,7 @@ function App() {
                 }
               />
               <Route path="/category/:categorySlug" element={<CategoryCoursesPage />} />
+              <Route path="/quiz/:quizId/take" element={<ProtectedRoute><TakeQuizPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>

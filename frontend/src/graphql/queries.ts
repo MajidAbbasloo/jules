@@ -15,6 +15,49 @@ export const GET_ME_WITH_COURSES = gql`
   }
 `;
 
+export const GET_MY_BOOKMARKED_LESSONS = gql`
+  query GetMyBookmarkedLessons {
+    getMyBookmarkedLessons {
+      id
+      title
+      isPreviewable
+      # quizId # If needed to link to quiz from bookmarks page
+      section {
+        id
+        title
+        course {
+          id
+          title
+        }
+      }
+    }
+  }
+`;
+
+export const GET_QUIZ_FOR_STUDENT = gql`
+  query GetQuizForStudent($quizId: ID!) {
+    getQuizForStudent(quizId: $quizId) { # Uses QuizForStudent type from backend
+      id
+      title
+      description
+      lesson {
+        id
+        title
+      }
+      questions { # QuizQuestionForStudent
+        id
+        text
+        type # QuestionTypeGQL
+        order
+        options { # QuestionOptionForStudent (no isCorrect)
+          id
+          text
+        }
+      }
+    }
+  }
+`;
+
 export const GET_QUESTIONS_FOR_LESSON = gql`
   query GetQuestionsForLesson($lessonId: ID!) {
     getQuestionsForLesson(lessonId: $lessonId) {
@@ -225,6 +268,48 @@ export const GET_MY_ENROLLMENT_FOR_COURSE = gql`
   }
 `;
 
+export const GET_QUIZ_FOR_INSTRUCTOR = gql`
+  query GetQuizForInstructor($quizId: ID!) {
+    getQuizForInstructor(quizId: $quizId) {
+      id
+      title
+      description
+      lesson {
+        id
+        title
+      }
+      questions {
+        id
+        text
+        type # QuestionTypeGQL
+        order
+        options {
+          id
+          text
+          isCorrect
+        }
+      }
+    }
+  }
+`;
+
+// Placeholder query, actual implementation might vary based on backend
+export const GET_LESSON_DETAILS_FOR_QUIZ = gql`
+  query GetLessonDetailsForQuiz($lessonId: ID!) {
+    # This is a conceptual query. The backend might return lesson details
+    # and an associated quizId or the full quiz object if the user is instructor/admin.
+    # Example structure:
+    getLessonById(id: $lessonId) { # Assuming a getLessonById query exists or can be added
+      id
+      title
+      # Potentially include quizId here if that's how it's modeled:
+      # quiz { id }
+      # Or, if the quiz is directly nested for instructors:
+      # quizForInstructor { id title description questions { id text type order options { id text isCorrect } } }
+    }
+  }
+`;
+
 
 export const GET_INSTRUCTOR_COURSES = gql`
   query GetInstructorCourses($instructorId: ID!) {
@@ -333,6 +418,8 @@ export const GET_COURSE_DETAILS_FOR_EDIT = gql`
           order
           isPreviewable
           resources
+          quizId
+          isBookmarked # Fetch bookmark status for current user
         }
       }
     }

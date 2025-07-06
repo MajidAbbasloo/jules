@@ -19,6 +19,16 @@ export const LOGIN_MUTATION = gql`
   }
 `;
 
+// --- Bookmark Mutation ---
+export const TOGGLE_BOOKMARK_MUTATION = gql`
+  mutation ToggleBookmark($lessonId: ID!) {
+    toggleBookmark(lessonId: $lessonId) {
+      id # Lesson ID
+      isBookmarked # New bookmark status
+    }
+  }
+`;
+
 // --- User Profile Mutation ---
 export const UPDATE_USER_PROFILE_MUTATION = gql`
   mutation UpdateUserProfile($firstName: String, $lastName: String, $bio: String, $avatarUrl: String) {
@@ -366,6 +376,91 @@ export const ADMIN_SET_COURSE_PUBLICATION_MUTATION = gql`
     }
   }
 `;
+
+// --- Quiz Management Mutations (Instructor/Admin) ---
+export const CREATE_QUIZ_MUTATION = gql`
+  mutation CreateQuiz($lessonId: ID!, $title: String!, $description: String) {
+    createQuiz(input: { lessonId: $lessonId, title: $title, description: $description }) {
+      id
+      title
+      description
+      lesson { id }
+    }
+  }
+`;
+
+export const ADD_QUESTION_TO_QUIZ_MUTATION = gql`
+  mutation AddQuestionToQuiz($quizId: ID!, $text: String!, $type: QuestionTypeGQL!, $order: Int!, $options: [QuestionOptionInput!]) {
+    addQuestionToQuiz(input: { quizId: $quizId, text: $text, type: $type, order: $order, options: $options }) {
+      id
+      text
+      type
+      order
+      options {
+        id
+        text
+        isCorrect
+      }
+    }
+  }
+`;
+// TODO: Add mutations for updateQuiz, deleteQuiz, updateQuizQuestion, deleteQuizQuestion
+
+
+// --- Student Quiz Taking Mutations ---
+export const START_QUIZ_ATTEMPT_MUTATION = gql`
+  mutation StartQuizAttempt($quizId: ID!) {
+    startQuizAttempt(quizId: $quizId) {
+      id # Attempt ID
+      startedAt
+      quiz {
+        id
+        title
+        questions { # To load questions for the attempt
+          id
+          text
+          type
+          order
+          options {
+            id
+            text
+          }
+        }
+      }
+    }
+  }
+`;
+
+export const SUBMIT_STUDENT_ANSWER_MUTATION = gql`
+  mutation SubmitStudentAnswer($attemptId: ID!, $questionId: ID!, $selectedOptionId: ID) {
+    submitStudentAnswer(input: {
+      attemptId: $attemptId,
+      questionId: $questionId,
+      selectedOptionId: $selectedOptionId
+    }) {
+      id # StudentAnswer ID
+      isCorrect # Can be null until graded/finished
+      # Potentially return question.id and selectedOption.id for UI updates
+    }
+  }
+`;
+
+export const FINISH_QUIZ_ATTEMPT_MUTATION = gql`
+  mutation FinishQuizAttempt($attemptId: ID!) {
+    finishQuizAttempt(attemptId: $attemptId) {
+      id # Attempt ID
+      completedAt
+      score
+      studentAnswers { # To show results/review
+        id
+        isCorrect
+        question {id text}
+        selectedOption {id text}
+      }
+    }
+  }
+`;
+
 
 // ClientUserRole enum (matches backend UserRole for clarity if needed in forms)
 /*

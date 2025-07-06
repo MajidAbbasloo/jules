@@ -87,6 +87,8 @@ export const typeDefs = gql`
     isPreviewable: Boolean!
     section: Section! # The section this lesson belongs to
     resources: Json # e.g., [{ title: "Slide Deck", url: "..." }]
+    quizId: ID # ID of the quiz associated with this lesson, if any
+    isBookmarked: Boolean # Resolved based on current user context
     createdAt: DateTime!
     updatedAt: DateTime!
   }
@@ -270,7 +272,42 @@ export const typeDefs = gql`
     getTotalUsersCount: Int!
     getTotalCoursesCount: Int!
     getTotalCategoriesCount: Int!
+
+    # Quiz query for instructor (includes answers)
+    getQuizForInstructor(quizId: ID!): Quiz
+    # Quiz query for student (hides correct answers)
+    getQuizForStudent(quizId: ID!): QuizForStudent # Use a student-specific type
+
+    # Bookmarks
+    getMyBookmarkedLessons: [Lesson!]
   }
+
+  type QuizForStudent { # Same as Quiz, but questions will use options without isCorrect
+    id: ID!
+    title: String!
+    description: String
+    lesson: Lesson!
+    questions: [QuizQuestionForStudent!] # Student-specific question type
+    # attempts: [QuizAttempt!] # Typically not shown while taking the quiz
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  type QuizQuestionForStudent {
+    id: ID!
+    # quiz: Quiz! # Avoid back-reference if not strictly needed for student view
+    text: String!
+    type: QuestionTypeGQL!
+    order: Int!
+    options: [QuestionOptionForStudent!] # Options without isCorrect
+  }
+
+  # Modify QuizQuestion to potentially return options without isCorrect for students
+  # This is handled by resolver logic, but schema might need a student-specific question type
+  # or the QuestionOption resolver needs context.
+  # For now, the existing QuizQuestion type is used, and resolver for options within it will adapt.
+  # The QuestionOptionForStudent type is available if needed.
+
 
   enum CourseLevel {
     BEGINNER
@@ -340,6 +377,19 @@ export const typeDefs = gql`
 
     # User Profile
     updateUserProfile(input: UpdateUserProfileInput!): Profile!
+
+    # Quiz Management by Instructor/Admin
+    createQuiz(input: CreateQuizInput!): Quiz!
+    addQuestionToQuiz(input: AddQuestionToQuizInput!): QuizQuestion!
+    # TODO: Add updateQuiz, deleteQuiz, updateQuizQuestion, deleteQuizQuestion mutations
+
+    # Student Quiz Taking Mutations
+    startQuizAttempt(quizId: ID!): QuizAttempt!
+    submitStudentAnswer(input: SubmitStudentAnswerInput!): StudentAnswer!
+    finishQuizAttempt(attemptId: ID!): QuizAttempt!
+
+    # Bookmark Mutation
+    toggleBookmark(lessonId: ID!): Lesson! # Returns the lesson with its new bookmark status
   }
 
   input UpdateUserProfileInput {
@@ -348,4 +398,92 @@ export const typeDefs = gql`
     bio: String
     avatarUrl: String # Can be a mock URL from getMockUploadUrl
   }
+
+  # --- Quiz System Types ---
+  enum QuestionTypeGQL {
+    MULTIPLE_CHOICE
+    TRUE_FALSE
+    # SHORT_ANSWER
+  }
+
+  type Quiz {
+    id: ID!
+    title: String!
+    description: String
+    lesson: Lesson!
+    questions: [QuizQuestion!]
+    attempts: [QuizAttempt!] # Could be restricted for student view
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  type QuizQuestion {
+    id: ID!
+    quiz: Quiz!
+    text: String!
+    type: QuestionTypeGQL!
+    order: Int!
+    options: [QuestionOption!]
+    # studentAnswers: [StudentAnswer!] # Avoid exposing all student answers directly on question type for student quiz view
+  }
+
+  type QuestionOption {
+    id: ID!
+    # question: QuizQuestion! # Avoid circular dependency if not needed, or ensure resolver handles it
+    text: String!
+    isCorrect: Boolean # Should be hidden from students taking quiz
+  }
+
+  type QuestionOptionForStudent { # Type for student view, omits isCorrect
+    id: ID!
+    text: String!
+  }
+
+  type QuizAttempt {
+    id: ID!
+    quiz: Quiz!
+    user: User!
+    score: Float
+    startedAt: DateTime!
+    completedAt: DateTime
+    studentAnswers: [StudentAnswer!]
+  }
+
+  type StudentAnswer {
+    id: ID!
+    attempt: QuizAttempt!
+    question: QuizQuestion!
+    selectedOption: QuestionOption # The option chosen by student
+    answerText: String
+    isCorrect: Boolean # Populated after grading
+  }
+
+  # --- Quiz Input Types ---
+  input CreateQuizInput {
+    lessonId: ID!
+    title: String!
+    description: String
+  }
+
+  input QuestionOptionInput {
+    text: String!
+    isCorrect: Boolean
+  }
+
+  input AddQuestionToQuizInput {
+    quizId: ID!
+    text: String!
+    type: QuestionTypeGQL!
+    order: Int!
+    options: [QuestionOptionInput!] # For MULTIPLE_CHOICE, TRUE_FALSE
+    # correctAnswer field might be part of options (isCorrect=true) or separate for other types
+  }
+
+  input SubmitStudentAnswerInput {
+      attemptId: ID!
+      questionId: ID!
+      selectedOptionId: ID # For multiple choice / true-false
+      # answerText: String # For short answer
+  }
+
 `;

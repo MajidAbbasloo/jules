@@ -82,6 +82,98 @@ model Answer {
   @@index([userId])
 }
 
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  // SHORT_ANSWER // Future consideration
+}
+
+model Quiz {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  lessonId      String    @unique // A lesson can have only one quiz
+  lesson        Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions     QuizQuestion[]
+  attempts      QuizAttempt[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([lessonId])
+}
+
+model QuizQuestion {
+  id        String   @id @default(cuid())
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  text      String   @db.Text
+  type      QuestionType @default(MULTIPLE_CHOICE)
+  order     Int      // Order of question in the quiz
+  options   QuestionOption[]
+  studentAnswers StudentAnswer[] // All answers submitted for this question across attempts
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([quizId])
+}
+
+model QuestionOption {
+  id          String   @id @default(cuid())
+  questionId  String
+  question    QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text        String
+  isCorrect   Boolean  @default(false) // Marks the correct option(s)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([questionId])
+}
+
+model QuizAttempt {
+  id            String    @id @default(cuid())
+  quizId        String
+  quiz          Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  score         Float?    // Percentage score, or number of correct answers
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  studentAnswers StudentAnswer[] // Answers submitted in this attempt
+
+  @@index([quizId])
+  @@index([userId])
+}
+
+model StudentAnswer {
+  id             String   @id @default(cuid())
+  attemptId      String
+  attempt        QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade) // No direct cascade, attempt handles it
+  selectedOptionId String?  // For MULTIPLE_CHOICE, TRUE_FALSE (points to QuestionOption.id)
+  selectedOption QuestionOption? @relation(fields: [selectedOptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  answerText     String?  // For SHORT_ANSWER type
+  isCorrect      Boolean? // Determined at time of grading/submission
+
+  @@index([attemptId])
+  @@index([questionId])
+  @@index([selectedOptionId])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, lessonId]) // User can bookmark a lesson only once
+  @@index([userId])
+  @@index([lessonId])
+}
+
+
 model Course {
   id            String    @id @default(cuid())
   title         String

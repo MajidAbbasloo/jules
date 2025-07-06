@@ -721,6 +721,79 @@ export const resolvers = {
       }
       return context.prisma.category.count();
     },
+    getQuizForInstructor: async (_parent: any, { quizId }: { quizId: string }, context: Context) => {
+      if (!context.user) throw new AuthenticationError('Not authenticated');
+
+      const quiz = await context.prisma.quiz.findUnique({
+        where: { id: quizId },
+        include: {
+          lesson: { include: { section: { include: { course: true } } } },
+          questions: {
+            orderBy: { order: 'asc' },
+            include: { options: { orderBy: { id: 'asc' } } } // Assuming simple order for options
+          }
+        }
+      });
+
+      if (!quiz) throw new UserInputError('Quiz not found.');
+
+      // Authorization: User must be the instructor of the course this quiz belongs to, or an Admin
+      const instructorId = quiz.lesson.section.course.instructorId;
+      if (context.user.role !== UserRole.ADMIN && context.user.id !== instructorId) {
+        throw new ForbiddenError('You are not authorized to manage this quiz.');
+      }
+
+      // For instructors, we return all details including correct answers in options
+      return quiz;
+    },
+    getMyBookmarkedLessons: async (_parent: any, _args: any, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('You must be logged in to view your bookmarks.');
+      }
+      const bookmarks = await context.prisma.bookmark.findMany({
+        where: { userId: context.user.id },
+        include: {
+          lesson: {
+            include: {
+              section: { include: { course: {select : {id: true, title: true}} } } // Include course for context
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      return bookmarks.map(bookmark => bookmark.lesson);
+    },
+    getQuizForStudent: async (_parent: any, { quizId }: { quizId: string }, context: Context) => {
+      if (!context.user) throw new AuthenticationError('Not authenticated');
+
+      // Student must be enrolled in the course to take the quiz
+      const quiz = await context.prisma.quiz.findUnique({
+        where: { id: quizId },
+        include: { lesson: { include: { section: { include: { course: true } } } } }
+      });
+      if (!quiz) throw new UserInputError('Quiz not found.');
+
+      const enrollment = await context.prisma.enrollment.findUnique({
+        where: { userId_courseId: { userId: context.user.id, courseId: quiz.lesson.section.courseId } }
+      });
+      if (!enrollment && context.user.role === UserRole.STUDENT) { // Allow instructor/admin to view this version too for testing
+        throw new ForbiddenError('You are not enrolled in this course.');
+      }
+
+      // Fetch quiz, but options will be filtered by the QuizQuestion.options resolver
+      return context.prisma.quiz.findUnique({
+        where: { id: quizId },
+        include: {
+          lesson: { select: { id: true, title: true } }, // Minimal lesson info
+          questions: {
+            orderBy: { order: 'asc' },
+            include: {
+              options: true // Options resolver will handle stripping `isCorrect`
+            }
+          }
+        }
+      });
+    },
   },
 
   Mutation: { // Extend Mutation block
@@ -908,7 +981,252 @@ export const resolvers = {
         },
         include: { user: { include: { profile: true } }, course: true }
       });
-    }
+    },
+
+    toggleBookmark: async (_parent: any, { lessonId }: { lessonId: string }, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('You must be logged in to bookmark lessons.');
+      }
+
+      const lesson = await context.prisma.lesson.findUnique({ where: { id: lessonId } });
+      if (!lesson) {
+        throw new UserInputError('Lesson not found.');
+      }
+
+      const existingBookmark = await context.prisma.bookmark.findUnique({
+        where: {
+          userId_lessonId: {
+            userId: context.user.id,
+            lessonId: lessonId,
+          },
+        },
+      });
+
+      if (existingBookmark) {
+        await context.prisma.bookmark.delete({
+          where: { id: existingBookmark.id },
+        });
+      } else {
+        await context.prisma.bookmark.create({
+          data: {
+            userId: context.user.id,
+            lessonId: lessonId,
+          },
+        });
+      }
+      return context.prisma.lesson.findUnique({
+          where: { id: lessonId },
+          include: { section: { include: { course: true } } }
+      });
+    },
+
+    createQuiz: async (_parent: any, { input }: { input: { lessonId: string, title: string, description?: string } }, context: Context) => {
+      if (!context.user) throw new AuthenticationError('Not authenticated');
+      const { lessonId, title, description } = input;
+
+      const lesson = await context.prisma.lesson.findUnique({
+        where: { id: lessonId },
+        include: { section: { include: { course: true } } }
+      });
+      if (!lesson) throw new UserInputError('Lesson not found.');
+
+      // Authorization: User must be instructor of the course or Admin
+      const instructorId = lesson.section.course.instructorId;
+      if (context.user.role !== UserRole.ADMIN && context.user.id !== instructorId) {
+        throw new ForbiddenError('You are not authorized to create a quiz for this lesson.');
+      }
+
+      // Check if a quiz already exists for this lesson (due to @unique on lessonId in Quiz model)
+      const existingQuiz = await context.prisma.quiz.findUnique({ where: { lessonId } });
+      if (existingQuiz) {
+        throw new UserInputError('A quiz already exists for this lesson. You can edit the existing one.');
+      }
+
+      return context.prisma.quiz.create({
+        data: {
+          lessonId,
+          title,
+          description,
+        },
+        include: { lesson: true, questions: true }
+      });
+    },
+
+    addQuestionToQuiz: async (_parent: any, { input }: { input: { quizId: string, text: string, type: QuestionType, order: number, options: { text: string, isCorrect?: boolean }[] } }, context: Context) => {
+      if (!context.user) throw new AuthenticationError('Not authenticated');
+      const { quizId, text, type, order, options } = input;
+
+      const quiz = await context.prisma.quiz.findUnique({
+        where: { id: quizId },
+        include: { lesson: { include: { section: { include: { course: true } } } } }
+      });
+      if (!quiz) throw new UserInputError('Quiz not found.');
+
+      // Authorization
+      const instructorId = quiz.lesson.section.course.instructorId;
+      if (context.user.role !== UserRole.ADMIN && context.user.id !== instructorId) {
+        throw new ForbiddenError('You are not authorized to add questions to this quiz.');
+      }
+
+      if (!text.trim()) throw new UserInputError('Question text cannot be empty.');
+      if (type === 'MULTIPLE_CHOICE' || type === 'TRUE_FALSE') {
+        if (!options || options.length < 2) throw new UserInputError('Multiple choice/True-False questions must have at least 2 options.');
+        const correctOptionsCount = options.filter(opt => opt.isCorrect).length;
+        if (type === 'MULTIPLE_CHOICE' && correctOptionsCount === 0) throw new UserInputError('At least one option must be marked as correct for multiple choice questions.');
+        if (type === 'TRUE_FALSE' && (options.length !== 2 || correctOptionsCount !== 1)) throw new UserInputError('True/False questions must have exactly two options, one being correct.');
+      }
+
+      // @ts-ignore // Prisma enum vs GraphQL enum
+      const questionTypeForDb: Prisma.QuestionType = type;
+
+
+      return context.prisma.quizQuestion.create({
+        data: {
+          quizId,
+          text,
+          type: questionTypeForDb,
+          order,
+          options: {
+            create: options.map(opt => ({ text: opt.text, isCorrect: opt.isCorrect || false }))
+          }
+        },
+        include: { quiz: true, options: true }
+      });
+    },
+
+    startQuizAttempt: async (_parent: any, { quizId }: { quizId: string }, context: Context) => {
+        if (!context.user) throw new AuthenticationError('Not authenticated');
+
+        const quiz = await context.prisma.quiz.findUnique({
+            where: { id: quizId },
+            include: { lesson: {include: {section: { include: { course: true }}}}}
+        });
+        if (!quiz) throw new UserInputError('Quiz not found.');
+
+        // Ensure user is enrolled (unless they are instructor/admin, who might "test" a quiz)
+        if (context.user.role === UserRole.STUDENT) {
+            const enrollment = await context.prisma.enrollment.findUnique({
+                where: { userId_courseId: { userId: context.user.id, courseId: quiz.lesson.section.course.id } }
+            });
+            if (!enrollment) throw new ForbiddenError('You must be enrolled in the course to attempt this quiz.');
+        }
+
+        // Optional: Check for previous incomplete attempts or limits on attempts. For now, allow multiple.
+
+        return context.prisma.quizAttempt.create({
+            data: {
+                quizId,
+                userId: context.user.id,
+                // startedAt is default now()
+            },
+            include: { quiz: true, user: {include: {profile: true}}, studentAnswers: true }
+        });
+    },
+
+    submitStudentAnswer: async (_parent: any, { input }: { input: { attemptId: string, questionId: string, selectedOptionId?: string, answerText?: string } }, context: Context) => {
+        if (!context.user) throw new AuthenticationError('Not authenticated');
+        const { attemptId, questionId, selectedOptionId, answerText } = input;
+
+        const attempt = await context.prisma.quizAttempt.findUnique({ where: { id: attemptId } });
+        if (!attempt || attempt.userId !== context.user.id) {
+            throw new ForbiddenError('Invalid attempt or not your attempt.');
+        }
+        if (attempt.completedAt) {
+            throw new UserInputError('This quiz attempt has already been completed.');
+        }
+
+        const question = await context.prisma.quizQuestion.findUnique({
+            where: { id: questionId },
+            include: { options: true }
+        });
+        if (!question || question.quizId !== attempt.quizId) {
+            throw new UserInputError('Question not found in this quiz.');
+        }
+
+        let isAnswerCorrect: boolean | undefined = undefined;
+        if (question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') {
+            if (!selectedOptionId) throw new UserInputError('An option must be selected for this question type.');
+            const chosenOption = question.options.find(opt => opt.id === selectedOptionId);
+            if (!chosenOption) throw new UserInputError('Selected option is invalid.');
+            isAnswerCorrect = chosenOption.isCorrect;
+        } else if (question.type === 'SHORT_ANSWER') {
+            // Grading for short answer would be manual or more complex, not implemented here
+            // For now, store the text, isCorrect remains null/undefined
+        }
+
+        // Upsert to allow changing an answer within the same attempt before finishing
+        return context.prisma.studentAnswer.upsert({
+            where: { attemptId_questionId: { attemptId, questionId } },
+            update: { selectedOptionId, answerText, isCorrect: isAnswerCorrect },
+            create: {
+                attemptId,
+                questionId,
+                selectedOptionId,
+                answerText,
+                isCorrect: isAnswerCorrect
+            },
+            include: { attempt: true, question: true, selectedOption: true }
+        });
+    },
+
+    finishQuizAttempt: async (_parent: any, { attemptId }: { attemptId: string }, context: Context) => {
+        if (!context.user) throw new AuthenticationError('Not authenticated');
+
+        const attempt = await context.prisma.quizAttempt.findUnique({
+            where: { id: attemptId },
+            include: {
+                studentAnswers: { include: { question: { include: { options: true } } } },
+                quiz: { include: { questions: true } }
+            }
+        });
+
+        if (!attempt || attempt.userId !== context.user.id) {
+            throw new ForbiddenError('Invalid attempt or not your attempt.');
+        }
+        if (attempt.completedAt) {
+            throw new UserInputError('This quiz attempt has already been completed and graded.');
+        }
+
+        let correctAnswersCount = 0;
+        for (const studentAnswer of attempt.studentAnswers) {
+            // Re-verify correctness based on stored QuestionOption.isCorrect
+            // This is important if isCorrect was not set on StudentAnswer or needs re-validation
+            const question = studentAnswer.question;
+            if (question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') {
+                const correctOption = question.options.find(opt => opt.isCorrect);
+                if (correctOption && studentAnswer.selectedOptionId === correctOption.id) {
+                    correctAnswersCount++;
+                    // Optionally update studentAnswer.isCorrect if not already set
+                    if (studentAnswer.isCorrect === null || studentAnswer.isCorrect === undefined) {
+                        await context.prisma.studentAnswer.update({
+                            where: { id: studentAnswer.id },
+                            data: { isCorrect: true }
+                        });
+                    }
+                } else {
+                     if (studentAnswer.isCorrect === null || studentAnswer.isCorrect === undefined) {
+                        await context.prisma.studentAnswer.update({
+                            where: { id: studentAnswer.id },
+                            data: { isCorrect: false }
+                        });
+                    }
+                }
+            }
+            // Add logic for other question types if implemented
+        }
+
+        const totalQuestions = attempt.quiz.questions.length;
+        const score = totalQuestions > 0 ? (correctAnswersCount / totalQuestions) * 100 : 0;
+
+        return context.prisma.quizAttempt.update({
+            where: { id: attemptId },
+            data: {
+                completedAt: new Date(),
+                score: parseFloat(score.toFixed(2))
+            },
+            include: { quiz: true, user: {include: {profile: true}}, studentAnswers: { include: { selectedOption: true, question: {include: {options: true}}}}}
+        });
+    },
 
     getMockUploadUrl: async (_parent: any, { filename, fileType }: { filename: string, fileType: string }, context: Context) => {
       if (!context.user) {
@@ -1058,6 +1376,25 @@ export const resolvers = {
   Lesson: {
     section: async (parent: { sectionId: string }, _args: any, context: Context) => {
       return context.prisma.section.findUnique({ where: { id: parent.sectionId } });
+    },
+    quizId: async (parent: { id: string }, _args: any, context: Context) => {
+      const quiz = await context.prisma.quiz.findUnique({
+        where: { lessonId: parent.id },
+        select: { id: true }
+      });
+      return quiz ? quiz.id : null;
+    },
+    isBookmarked: async (parent: { id: string }, _args: any, context: Context): Promise<boolean> => {
+      if (!context.user) return false;
+      const bookmark = await context.prisma.bookmark.findUnique({
+        where: {
+          userId_lessonId: {
+            userId: context.user.id,
+            lessonId: parent.id,
+          },
+        },
+      });
+      return !!bookmark;
     }
   },
 

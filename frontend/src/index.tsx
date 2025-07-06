@@ -2,7 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ApolloProvider } from '@apollo/client';
 import client from './apolloClient';
-import { AuthProvider } from './context/AuthContext'; // Import AuthProvider
+import { AuthProvider } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext'; // Import NotificationProvider
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
@@ -14,9 +15,11 @@ const root = ReactDOM.createRoot(
 root.render(
   <React.StrictMode>
     <ApolloProvider client={client}>
-      <AuthProvider> {/* Wrap App with AuthProvider */}
-        <App />
-      </AuthProvider>
+      <NotificationProvider> {/* Wrap AuthProvider (and thus App) with NotificationProvider */}
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </NotificationProvider>
     </ApolloProvider>
   </React.StrictMode>
 );

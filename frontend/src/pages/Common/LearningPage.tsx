@@ -5,13 +5,15 @@ import { useQuery, useMutation } from '@apollo/client'; // Added useMutation
 import {
     GET_COURSE_DETAILS_FOR_EDIT as GET_LEARNING_COURSE_DETAILS,
     IS_ENROLLED_QUERY, // Still useful for initial gate-keeping
-    GET_MY_ENROLLMENT_FOR_COURSE, // New query for progress
+    GET_MY_ENROLLMENT_FOR_COURSE,
     GET_QUESTIONS_FOR_LESSON
 } from '../../graphql/queries';
+// GET_LEARNING_COURSE_DETAILS needs to be updated to fetch isBookmarked for lessons
 import {
     ASK_QUESTION_MUTATION,
     POST_ANSWER_MUTATION,
-    TOGGLE_LESSON_COMPLETED_MUTATION
+    TOGGLE_LESSON_COMPLETED_MUTATION,
+    TOGGLE_BOOKMARK_MUTATION
 } from '../../graphql/mutations';
 import { useAuth } from '../../context/AuthContext';
 
@@ -37,6 +39,8 @@ interface Lesson {
   duration?: number | null;
   isPreviewable: boolean;
   resources?: any | null;
+  quizId?: string | null;
+  isBookmarked?: boolean | null; // Added for bookmark status
 }
 
 interface Section {
@@ -114,6 +118,37 @@ const LearningPage: React.FC = () => {
         alert(t('learningPage.errorMarkingLesson', 'خطا در بروزرسانی وضعیت درس: ') + error.message);
     }
 });
+
+  const [toggleBookmark, { loading: togglingBookmark }] = useMutation(TOGGLE_BOOKMARK_MUTATION, {
+    onCompleted: (data) => {
+      // Update the selectedLesson's bookmark status locally for immediate UI feedback
+      if (selectedLesson && data.toggleBookmark && selectedLesson.id === data.toggleBookmark.id) {
+        setSelectedLesson(prev => prev ? { ...prev, isBookmarked: data.toggleBookmark.isBookmarked } : null);
+      }
+      // Refetch course details to update the entire list of lessons' bookmark statuses in the sidebar
+      // Or, more efficiently, update the Apollo cache directly for this lesson.
+      // For now, a refetch of courseData will update the sidebar.
+      // Consider a targeted cache update for better performance in a real app.
+      if (courseData?.getCourseById) {
+        const updatedSections = courseData.getCourseById.sections.map(section => ({
+          ...section,
+          lessons: section.lessons.map(lesson =>
+            lesson.id === data.toggleBookmark.id
+              ? { ...lesson, isBookmarked: data.toggleBookmark.isBookmarked }
+              : lesson
+          )
+        }));
+        // This manual update of courseData is tricky with Apollo cache.
+        // A refetch or specific cache update via `update` function in useMutation is better.
+        // For now, we'll rely on selectedLesson local update and potential future refetch on courseData.
+      }
+       // TODO: Toast notification for bookmark status change
+    },
+    onError: (error) => {
+      // TODO: Toast for error
+      alert(t('bookmark.error', 'خطا در تغییر وضعیت نشانک: ') + error.message);
+    }
+  });
 
 
   useEffect(() => {
@@ -306,8 +341,20 @@ const LearningPage: React.FC = () => {
         {selectedLesson ? (
           // MUI: <Paper elevation={3} sx={{ p: 3 }}>
           <div>
-            {/* MUI: <Typography variant="h4" component="h2" gutterBottom>{selectedLesson.title}</Typography> */}
-            <h2>{selectedLesson.title}</h2>
+            {/* MUI: <Box sx={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}> <Typography variant="h4" component="h2" gutterBottom>{selectedLesson.title}</Typography> <IconButton onClick={() => toggleBookmark({variables: {lessonId: selectedLesson.id}})} disabled={togglingBookmark} color={selectedLesson.isBookmarked ? "primary" : "default"}><BookmarkIcon /></IconButton> </Box> */}
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <h2>{selectedLesson.title}</h2>
+                {isAuthenticated && ( // Only show bookmark if authenticated
+                    <button
+                        onClick={() => toggleBookmark({variables: {lessonId: selectedLesson.id}})}
+                        disabled={togglingBookmark}
+                        style={{padding: '5px 10px', cursor: 'pointer', background: selectedLesson.isBookmarked ? '#007bff' : '#eee', color: selectedLesson.isBookmarked ? 'white' : 'black', border: '1px solid #ccc'}}
+                    >
+                        {togglingBookmark ? t('saving', '...') : (selectedLesson.isBookmarked ? t('bookmark.remove', 'حذف نشانک') : t('bookmark.add', 'افزودن به نشانک‌ها'))}
+                    </button>
+                )}
+            </div>
+
             {selectedLesson.videoUrl ? (
               () => {
                 const videoUrl = selectedLesson.videoUrl as string; // Ensure type for string methods

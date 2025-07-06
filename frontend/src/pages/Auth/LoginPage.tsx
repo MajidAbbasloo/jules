@@ -2,22 +2,24 @@ import React, { useState } from 'react';
 import { useMutation } from '@apollo/client';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext'; // Import useNotification
 import { LOGIN_MUTATION } from '../../graphql/mutations';
 import { useTranslation } from 'react-i18next';
 
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
   const { login: authLogin } = useAuth();
+  const { addNotification } = useNotification(); // Use notification hook
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  // Error state removed, using notifications instead
 
   const [loginUser, { loading }] = useMutation(LOGIN_MUTATION, {
     onCompleted: (data) => {
       const { token, user } = data.login;
-      authLogin(token, user); // Update auth context
-      // Redirect based on role
+      authLogin(token, user);
+      addNotification(t('login.success', 'ورود با موفقیت انجام شد!'), 'success');
       switch (user.role) {
         case 'ADMIN':
           navigate('/dashboard/admin');
@@ -30,16 +32,17 @@ const LoginPage: React.FC = () => {
       }
     },
     onError: (apolloError) => {
-      // TODO: Replace with toast notification - e.g., toast.error(apolloError.message || t('login.failed'));
-      setError(apolloError.message || t('login.failed'));
+      addNotification(apolloError.message || t('login.failed'), 'error');
+      // setError(apolloError.message || t('login.failed')); // Keep if you want inline error too
     }
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    // setError(''); // Removed
     if (!email || !password) {
-      setError(t('login.emailPasswordRequired'));
+      addNotification(t('login.emailPasswordRequired'), 'error'); // Use notification
+      // setError(t('login.emailPasswordRequired')); // Removed
       return;
     }
     try {
@@ -89,7 +92,7 @@ const LoginPage: React.FC = () => {
           />
         </div>
         {/* MUI: {error && <Alert severity="error" sx={{ width: '100%', mt: 1 }}>{error}</Alert>} */}
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {/* {error && <p style={{ color: 'red' }}>{error}</p>} Removed inline error display */}
         {/* MUI:
             <Button type="submit" fullWidth variant="contained" sx={{ mt: 3, mb: 2 }} disabled={loading}>
               {loading ? <CircularProgress size={24} /> : t('login.submitButton', 'ورود')}
