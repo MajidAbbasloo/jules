@@ -278,5 +278,12 @@
   "profilePage.uploadAvatar": "Or upload avatar file",
   "profilePage.saveChanges": "Save Changes",
   "profilePage.updateSuccess": "Profile updated successfully.",
-  "profilePage.updateError": "Error updating profile."
+  "profilePage.updateError": "Error updating profile.",
+  "adminDashboard.statsTitle": "Platform Overview Stats",
+  "adminDashboard.statsError": "Error loading statistics.",
+  "adminDashboard.totalUsers": "Total Users",
+  "adminDashboard.totalCourses": "Total Courses",
+  "adminDashboard.totalCategories": "Total Categories",
+  "adminDashboard.statsUnavailable": "Statistics are currently unavailable. (Backend query needs implementation)",
+  "learningPage.resourcesTitle": "Lesson Resources"
 }

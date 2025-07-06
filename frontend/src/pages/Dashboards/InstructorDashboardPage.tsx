@@ -17,6 +17,13 @@ const InstructorDashboardPage: React.FC = () => {
       <h2>{t('instructorDashboard.title', 'داشبورد مدرس')}</h2>
       {user && <p>{t('instructorDashboard.welcomeMessage', 'خوش آمدید')}, {user.profile?.firstName || user.email}!</p>}
 
+      {/* MUI: <Button component={Link} to="/profile/me" variant="outlined" sx={{ my: 2 }}>{t('myProfile', 'پروفایل من')}</Button> */}
+      <div style={{ margin: "15px 0" }}>
+        <Link to="/profile/me" style={{ textDecoration: 'none', padding: '8px 15px', border: '1px solid #007bff', borderRadius: '4px', color: '#007bff', marginRight: '15px' }}>
+          {t('myProfile', 'پروفایل من')}
+        </Link>
+      </div>
+
       <nav style={{ marginBottom: '20px', borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>
         <Link to="/dashboard/instructor/courses" style={{ marginRight: '15px' }}>
           {t('instructorDashboard.manageCoursesLink', 'مدیریت دوره ها')}

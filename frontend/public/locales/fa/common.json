@@ -278,5 +278,12 @@
   "profilePage.uploadAvatar": "یا فایل آواتار را آپلود کنید",
   "profilePage.saveChanges": "ذخیره تغییرات",
   "profilePage.updateSuccess": "پروفایل با موفقیت به‌روزرسانی شد.",
-  "profilePage.updateError": "خطا در به‌روزرسانی پروفایل."
+  "profilePage.updateError": "خطا در به‌روزرسانی پروفایل.",
+  "adminDashboard.statsTitle": "آمار کلی پلتفرم",
+  "adminDashboard.statsError": "خطا در بارگذاری آمار.",
+  "adminDashboard.totalUsers": "کل کاربران",
+  "adminDashboard.totalCourses": "کل دوره‌ها",
+  "adminDashboard.totalCategories": "کل دسته‌بندی‌ها",
+  "adminDashboard.statsUnavailable": "آمار در حال حاضر در دسترس نیست. (Query در backend پیاده‌سازی شود)",
+  "learningPage.resourcesTitle": "منابع درس"
 }

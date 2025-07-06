@@ -353,9 +353,27 @@ const LearningPage: React.FC = () => {
             )()
             ) : (
               // MUI: <Typography variant="body1" paragraph sx={{ whiteSpace: 'pre-wrap', mt: 2 }}>{selectedLesson.content || t('learningPage.noContent', 'محتوایی برای این درس وجود ندارد.')}</Typography>
-              <p style={{whiteSpace: 'pre-wrap', marginTop: '15px'}}>{selectedLesson.content || t('learningPage.noContent', 'محتوایی برای این درس وجود ندارد.')}</p>
+              // Using <pre> for basic formatting preservation of text content
+              <pre style={{whiteSpace: 'pre-wrap', marginTop: '15px', fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.6'}}>
+                {selectedLesson.content || t('learningPage.noContent', 'محتوایی برای این درس وجود ندارد.')}
+              </pre>
             )}
-            {/* TODO: Add resources display, next/prev lesson buttons, mark as complete */}
+
+            {/* Display Lesson Resources */}
+            {selectedLesson.resources && Array.isArray(selectedLesson.resources) && selectedLesson.resources.length > 0 && (
+              // MUI: <Box sx={{mt: 3, p:2, border: '1px solid #eee', borderRadius: '4px'}}> <Typography variant="h6" gutterBottom>{t('learningPage.resourcesTitle', 'منابع درس')}</Typography> <List dense> {selectedLesson.resources.map(... <ListItem> <ListItemText primary={<Link href={res.url} target="_blank">{res.title}</Link>} /> </ListItem>)} </List> </Box>
+              <div style={{marginTop: '20px', paddingTop: '10px', borderTop: '1px solid #ddd'}}>
+                <h4>{t('learningPage.resourcesTitle', 'منابع درس')}:</h4>
+                <ul style={{paddingLeft: '20px'}}>
+                  {(selectedLesson.resources as Array<{title: string, url: string}>).map((resource, index) => (
+                    <li key={index} style={{marginBottom: '5px'}}>
+                      <a href={resource.url} target="_blank" rel="noopener noreferrer">{resource.title || resource.url}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {/* TODO: Add next/prev lesson buttons, mark as complete (already done for completion) */}
 
             {/* Q&A Section */}
             {/* MUI: <Box sx={qnaSectionStyle}> <Typography variant="h5" gutterBottom>{t('qna.title', 'پرسش و پاسخ')}</Typography> ... </Box> */}

@@ -703,6 +703,24 @@ export const resolvers = {
         orderBy: { createdAt: 'desc' }
       });
     },
+    getTotalUsersCount: async (_parent: any, _args: any, context: Context) => {
+      if (!context.user || context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Access denied. Admin role required.');
+      }
+      return context.prisma.user.count();
+    },
+    getTotalCoursesCount: async (_parent: any, _args: any, context: Context) => {
+      if (!context.user || context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Access denied. Admin role required.');
+      }
+      return context.prisma.course.count();
+    },
+    getTotalCategoriesCount: async (_parent: any, _args: any, context: Context) => {
+      if (!context.user || context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Access denied. Admin role required.');
+      }
+      return context.prisma.category.count();
+    },
   },
 
   Mutation: { // Extend Mutation block

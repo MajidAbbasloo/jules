@@ -71,6 +71,13 @@ const StudentDashboardPage: React.FC = () => {
       {/* MUI: {user && <Typography variant="h6" gutterBottom>{t('studentDashboard.welcome', 'خوش آمدید')}, {user.profile?.firstName || user.email}!</Typography>} */}
       {user && <p>{t('studentDashboard.welcome', 'خوش آمدید')}, {user.profile?.firstName || user.email}!</p>}
 
+      {/* MUI: <Button component={Link} to="/profile/me" variant="outlined" sx={{ my: 2 }}>{t('myProfile', 'پروفایل من')}</Button> */}
+      <div style={{ margin: "15px 0" }}>
+        <Link to="/profile/me" style={{ textDecoration: 'none', padding: '8px 15px', border: '1px solid #007bff', borderRadius: '4px', color: '#007bff' }}>
+          {t('myProfile', 'پروفایل من')}
+        </Link>
+      </div>
+
       {/* MUI: <Typography variant="h5" sx={{my: 2}}>{t('studentDashboard.myCoursesTitle', 'دوره های من')}</Typography> */}
       <h3>{t('studentDashboard.myCoursesTitle', 'دوره های من')}</h3>
 

@@ -265,6 +265,11 @@ export const typeDefs = gql`
 
     # Q&A Queries
     getQuestionsForLesson(lessonId: ID!): [Question!]
+
+    # Admin Dashboard Stats
+    getTotalUsersCount: Int!
+    getTotalCoursesCount: Int!
+    getTotalCategoriesCount: Int!
   }
 
   enum CourseLevel {
