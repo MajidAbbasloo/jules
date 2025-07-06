@@ -245,6 +245,26 @@ export const DELETE_LESSON_MUTATION = gql`
   }
 `;
 
+// --- Admin Mutations ---
+export const UPDATE_USER_ROLE_MUTATION = gql`
+  mutation UpdateUserRole($userId: ID!, $newRole: UserRole!) {
+    updateUserRole(userId: $userId, newRole: $newRole) {
+      id
+      email
+      role # Ensure role is returned to update UI
+    }
+  }
+`;
+
+export const ADMIN_SET_COURSE_PUBLICATION_MUTATION = gql`
+  mutation AdminSetCoursePublication($courseId: ID!, $isPublished: Boolean!) {
+    adminSetCoursePublication(courseId: $courseId, isPublished: $isPublished) {
+      id
+      title
+      isPublished # Important to update UI
+    }
+  }
+`;
 
 // ClientUserRole enum (matches backend UserRole for clarity if needed in forms)
 /*

@@ -12,7 +12,8 @@ const StudentDashboardPage = React.lazy(() => import('./pages/Dashboards/Student
 const InstructorDashboardPage = React.lazy(() => import('./pages/Dashboards/InstructorDashboardPage'));
 const ManageCoursesPage = React.lazy(() => import('./pages/Dashboards/Instructor/ManageCoursesPage'));
 const ManageCourseContentPage = React.lazy(() => import('./pages/Dashboards/Instructor/ManageCourseContentPage'));
-const LearningPage = React.lazy(() => import('./pages/Common/LearningPage')); // New Import
+const LearningPage = React.lazy(() => import('./pages/Common/LearningPage'));
+const CategoryCoursesPage = React.lazy(() => import('./pages/Common/CategoryCoursesPage')); // New Import
 const AdminDashboardPage = React.lazy(() => import('./pages/Dashboards/AdminDashboardPage'));
 const CourseDetailsPage = React.lazy(() => import('./pages/Common/CourseDetailsPage'));
 const NotFoundPage = React.lazy(() => import('./pages/Common/NotFoundPage'));
@@ -123,16 +124,16 @@ function App() {
               />
 
               <Route path="/course/:courseId" element={<CourseDetailsPage />} />
-              <Route
-                path="/learn/course/:courseId"
+              />
+
+              <Route path="/learn/course/:courseId"
                 element={
                   <ProtectedRoute>
-                    {/* Enrollment is checked inside LearningPage for students,
-                        instructors/admins get access by default via isUserActuallyEnrolled logic */}
                     <LearningPage />
                   </ProtectedRoute>
                 }
               />
+              <Route path="/category/:categorySlug" element={<CategoryCoursesPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>

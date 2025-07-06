@@ -187,6 +187,9 @@ export const typeDefs = gql`
     # Category
     getAllCategories: [Category!]
     getCategoryById(id: ID!): Category
+    getCategoryBySlug(slug: String!): Category # For the category page header
+    getCoursesByCategorySlug(slug: String!, publishedOnly: Boolean = true): [Course!] # For listing courses on category page
+
     # TODO: Add more specific queries for sections, lessons if needed directly
   }
 
@@ -231,5 +234,15 @@ export const typeDefs = gql`
     # Get courses a student is enrolled in
     getMyEnrolledCourses: [Enrollment!]
     isEnrolled(courseId: ID!): Boolean!
+
+    # Admin queries
+    getAllUsers: [User!] # Admin access
+    getAllCoursesForAdmin(publishedOnly: Boolean): [Course!] # Admin access, optional filter
+  }
+
+  extend type Mutation {
+    # Admin mutations
+    updateUserRole(userId: ID!, newRole: UserRole!): User! # Admin access
+    adminSetCoursePublication(courseId: ID!, isPublished: Boolean!): Course! # Admin access
   }
 `;

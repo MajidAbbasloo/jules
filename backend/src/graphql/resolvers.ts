@@ -131,6 +131,87 @@ export const resolvers = {
         include: { courses: { where: { isPublished: true } } },
       });
     },
+    getCategoryBySlug: async (_parent: any, { slug }: { slug: string }, context: Context) => {
+      return context.prisma.category.findUnique({
+        where: { slug },
+      });
+    },
+    getCoursesByCategorySlug: async (_parent: any, { slug, publishedOnly = true }: { slug: string, publishedOnly?: boolean }, context: Context) => {
+      const category = await context.prisma.category.findUnique({ where: { slug } });
+      if (!category) {
+        throw new UserInputError('Category not found for the given slug.');
+      }
+      return context.prisma.course.findMany({
+        where: {
+          categoryId: category.id,
+          ...(publishedOnly && { isPublished: true })
+        },
+        include: {
+          instructor: { include: { profile: true } },
+          category: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    },
+    // Admin queries from previous step
+    getAllUsers: async (_parent: any, _args: any, context: Context) => {
+      if (!context.user || context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Access denied. Admin role required.');
+      }
+      return context.prisma.user.findMany({
+        include: { profile: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    },
+    getAllCoursesForAdmin: async (_parent: any, { publishedOnly }: { publishedOnly?: boolean }, context: Context) => {
+      if (!context.user || context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Access denied. Admin role required.');
+      }
+      const whereClause = publishedOnly === undefined ? {} : { isPublished: publishedOnly };
+      return context.prisma.course.findMany({
+        where: whereClause,
+        include: {
+          instructor: { include: { profile: true } },
+          category: true,
+          sections: { include: { lessons: true } },
+           _count: { select: { enrollments: true } }
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    },
+    // Enrollment queries from previous step
+    getMyEnrolledCourses: async (_parent: any, _args: any, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('Not authenticated.');
+      }
+      return context.prisma.enrollment.findMany({
+        where: { userId: context.user.id },
+        include: {
+          course: {
+            include: {
+              instructor: { include: { profile: true } },
+              category: true,
+              _count: { select: { sections: true, lessons: true } }
+            }
+          }
+        },
+        orderBy: { enrolledAt: 'desc' }
+      });
+    },
+    isEnrolled: async (_parent: any, { courseId }: { courseId: string }, context: Context): Promise<boolean> => {
+        if (!context.user) {
+            return false;
+        }
+        const enrollment = await context.prisma.enrollment.findUnique({
+            where: {
+                userId_courseId: {
+                    userId: context.user.id,
+                    courseId: courseId,
+                },
+            },
+        });
+        return !!enrollment;
+    },
   },
 
   Mutation: {
@@ -467,8 +548,69 @@ export const resolvers = {
         });
         return !!enrollment;
     },
+    getAllUsers: async (_parent: any, _args: any, context: Context) => {
+      if (!context.user || context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Access denied. Admin role required.');
+      }
+      return context.prisma.user.findMany({
+        include: { profile: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    },
+    getAllCoursesForAdmin: async (_parent: any, { publishedOnly }: { publishedOnly?: boolean }, context: Context) => {
+      if (!context.user || context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Access denied. Admin role required.');
+      }
+      // If publishedOnly is undefined, admin sees all. If true/false, it filters.
+      const whereClause = publishedOnly === undefined ? {} : { isPublished: publishedOnly };
+
+      return context.prisma.course.findMany({
+        where: whereClause,
+        include: {
+          instructor: { include: { profile: true } },
+          category: true,
+          sections: { include: { lessons: true } }, // Admin might want full details
+           _count: { select: { enrollments: true } }
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    },
   },
 
+  Mutation: { // Extend Mutation block
+    ...resolvers.Mutation, // Keep existing mutations
+    updateUserRole: async (_parent: any, { userId, newRole }: { userId: string, newRole: UserRole }, context: Context) => {
+      if (!context.user || context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Access denied. Admin role required to change user roles.');
+      }
+      if (!Object.values(UserRole).includes(newRole)) {
+        throw new UserInputError(`Invalid role: ${newRole}`);
+      }
+      // Prevent admin from accidentally changing their own role or creating too many admins easily.
+      // Specific checks might be needed (e.g., not demoting the last admin).
+      // For now, a simple update:
+      return context.prisma.user.update({
+        where: { id: userId },
+        data: { role: newRole },
+        include: { profile: true },
+      });
+    },
+    adminSetCoursePublication: async (_parent: any, { courseId, isPublished }: { courseId: string, isPublished: boolean }, context: Context) => {
+      if (!context.user || context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Access denied. Admin role required to change course publication status.');
+      }
+      const course = await context.prisma.course.findUnique({ where: { id: courseId } });
+      if (!course) {
+        throw new UserInputError('Course not found.');
+      }
+      // If publishing, might add checks here (e.g., course has content)
+      return context.prisma.course.update({
+        where: { id: courseId },
+        data: { isPublished },
+        include: { instructor: { include: { profile: true } }, category: true },
+      });
+    },
+  },
 
   // --- Relational Resolvers (Type Resolvers) ---
   // These resolve fields on types if they are not directly available or need custom logic.

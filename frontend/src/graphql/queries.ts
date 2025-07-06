@@ -15,6 +15,83 @@ export const GET_ME_WITH_COURSES = gql`
   }
 `;
 
+export const GET_CATEGORY_BY_SLUG = gql`
+  query GetCategoryBySlug($slug: String!) {
+    getCategoryBySlug(slug: $slug) {
+      id
+      name
+      description
+    }
+  }
+`;
+
+export const GET_COURSES_BY_CATEGORY_SLUG = gql`
+  query GetCoursesByCategorySlug($slug: String!, $publishedOnly: Boolean) {
+    getCoursesByCategorySlug(slug: $slug, publishedOnly: $publishedOnly) {
+      id
+      title
+      description
+      thumbnailUrl
+      price
+      instructor {
+        id
+        profile {
+          firstName
+          lastName
+        }
+      }
+      category { # Though we are on category page, it's good for consistency / card component
+        id
+        name
+      }
+    }
+  }
+`;
+
+export const GET_ALL_COURSES_FOR_ADMIN_VIEW = gql`
+  query GetAllCoursesForAdminView($publishedOnly: Boolean) {
+    getAllCoursesForAdmin(publishedOnly: $publishedOnly) { # Uses the backend query
+      id
+      title
+      isPublished
+      price
+      instructor {
+        id
+        email
+        profile {
+          firstName
+          lastName
+        }
+      }
+      category {
+        id
+        name
+      }
+      createdAt
+      updatedAt
+      _count { # Example of fetching counts if needed
+        enrollments
+      }
+    }
+  }
+`;
+
+export const GET_ALL_USERS_FOR_ADMIN = gql`
+  query GetAllUsersForAdmin {
+    getAllUsers { # Assuming this is the admin-only query
+      id
+      email
+      role
+      isEmailVerified
+      createdAt
+      profile {
+        firstName
+        lastName
+      }
+    }
+  }
+`;
+
 export const IS_ENROLLED_QUERY = gql`
   query IsEnrolled($courseId: ID!) {
     isEnrolled(courseId: $courseId)
