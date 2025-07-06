@@ -19,6 +19,67 @@ export const LOGIN_MUTATION = gql`
   }
 `;
 
+// --- Review Mutations ---
+export const SUBMIT_REVIEW_MUTATION = gql`
+  mutation SubmitReview($courseId: ID!, $rating: Int!, $comment: String) {
+    submitReview(courseId: $courseId, rating: $rating, comment: $comment) {
+      id
+      rating
+      comment
+      createdAt
+      user {
+        id
+        email
+        profile { firstName lastName }
+      }
+    }
+  }
+`;
+
+// --- Q&A Mutations ---
+export const ASK_QUESTION_MUTATION = gql`
+  mutation AskQuestion($lessonId: ID!, $title: String, $content: String!) {
+    askQuestion(input: { lessonId: $lessonId, title: $title, content: $content }) {
+      id
+      title
+      content
+      createdAt
+      user {
+        id
+        email
+        profile { firstName lastName }
+      }
+      answers { # Initialize with empty array or fetch if needed
+        id
+      }
+    }
+  }
+`;
+
+export const POST_ANSWER_MUTATION = gql`
+  mutation PostAnswer($questionId: ID!, $content: String!) {
+    postAnswer(input: { questionId: $questionId, content: $content }) {
+      id
+      content
+      createdAt
+      user {
+        id
+        email
+        profile { firstName lastName }
+      }
+      question { # To link back or update cache
+        id
+        answers { # To update the answers list on the question
+            id
+            content
+            createdAt
+            user {id email profile {firstName lastName}}
+        }
+      }
+    }
+  }
+`;
+
 // --- Enrollment Mutations ---
 export const ENROLL_IN_COURSE_MUTATION = gql`
   mutation EnrollInCourse($courseId: ID!) {

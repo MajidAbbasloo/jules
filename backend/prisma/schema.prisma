@@ -45,6 +45,36 @@ enum UserRole {
   ADMIN
 }
 
+model Question {
+  id        String   @id @default(cuid())
+  title     String?  // Optional title for the question
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id]) // User who asked
+  answers   Answer[]
+
+  @@index([lessonId])
+  @@index([userId])
+}
+
+model Answer {
+  id          String   @id @default(cuid())
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id]) // User who answered (instructor/admin)
+
+  @@index([questionId])
+  @@index([userId])
+}
+
 model Course {
   id            String    @id @default(cuid())
   title         String

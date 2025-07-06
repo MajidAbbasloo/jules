@@ -238,11 +238,54 @@ export const typeDefs = gql`
     # Admin queries
     getAllUsers: [User!] # Admin access
     getAllCoursesForAdmin(publishedOnly: Boolean): [Course!] # Admin access, optional filter
+
+    # Q&A Queries
+    getQuestionsForLesson(lessonId: ID!): [Question!]
+  }
+
+  type Question {
+    id: ID!
+    title: String
+    content: String!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    lesson: Lesson! # Should resolve to the lesson it belongs to
+    user: User! # User who asked
+    answers: [Answer!] # Answers to this question
+  }
+
+  type Answer {
+    id: ID!
+    content: String!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    question: Question! # Question this answer belongs to
+    user: User! # User who answered
+  }
+
+  input AskQuestionInput {
+    lessonId: ID!
+    title: String
+    content: String!
+  }
+
+  input PostAnswerInput {
+    questionId: ID!
+    content: String!
   }
 
   extend type Mutation {
     # Admin mutations
     updateUserRole(userId: ID!, newRole: UserRole!): User! # Admin access
     adminSetCoursePublication(courseId: ID!, isPublished: Boolean!): Course! # Admin access
+
+    # Q&A Mutations
+    askQuestion(input: AskQuestionInput!): Question!
+    postAnswer(input: PostAnswerInput!): Answer!
+    # TODO: Add edit/delete mutations for Question and Answer if time permits
+    # editQuestion(id: ID!, title: String, content: String): Question
+    # deleteQuestion(id: ID!): Boolean
+    # editAnswer(id: ID!, content: String): Answer
+    # deleteAnswer(id: ID!): Boolean
   }
 `;

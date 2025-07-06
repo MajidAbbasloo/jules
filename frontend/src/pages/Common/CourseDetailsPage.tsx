@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_COURSE_DETAILS_FOR_EDIT as GET_COURSE_DETAILS, IS_ENROLLED_QUERY } from '../../graphql/queries';
-import { ENROLL_IN_COURSE_MUTATION } from '../../graphql/mutations';
+import {
+    GET_COURSE_DETAILS_FOR_EDIT as GET_COURSE_DETAILS,
+    IS_ENROLLED_QUERY,
+    GET_REVIEWS_FOR_COURSE
+} from '../../graphql/queries';
+import { ENROLL_IN_COURSE_MUTATION, SUBMIT_REVIEW_MUTATION } from '../../graphql/mutations';
 import { useAuth } from '../../context/AuthContext';
 
 interface Lesson {
@@ -58,6 +62,10 @@ const CourseDetailsPage: React.FC = () => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [isUserEnrolled, setIsUserEnrolled] = useState<boolean | null>(null);
   const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
+  const [showReviewForm, setShowReviewForm] = useState<boolean>(false);
+  const [reviewRating, setReviewRating] = useState<number>(0);
+  const [reviewComment, setReviewComment] = useState<string>('');
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   // Query for course details
   const { loading: courseLoading, error: courseError, data: courseData } = useQuery<{ getCourseById: Course }>(GET_COURSE_DETAILS, {
@@ -92,6 +100,29 @@ const CourseDetailsPage: React.FC = () => {
     }
   });
 
+  // Query for reviews
+  const { loading: reviewsLoading, error: reviewsError, data: reviewsData, refetch: refetchReviews } = useQuery(GET_REVIEWS_FOR_COURSE, {
+    variables: { courseId },
+    skip: !courseId,
+  });
+
+  // Mutation for submitting a review
+  const [submitReview, { loading: reviewSubmitting }] = useMutation(SUBMIT_REVIEW_MUTATION, {
+    onCompleted: () => {
+      alert(t('reviews.submitSuccess', 'نظر شما با موفقیت ثبت شد.'));
+      setShowReviewForm(false);
+      setReviewRating(0);
+      setReviewComment('');
+      setReviewError(null);
+      refetchReviews();
+      // Potentially refetch course data if average rating is part of it and calculated on backend
+    },
+    onError: (error) => {
+      setReviewError(error.message || t('reviews.submitErrorGeneric', 'خطا در ارسال نظر.'));
+    }
+  });
+
+
   useEffect(() => {
     // If user logs out/in, or courseId changes, refetch enrollment status
     if (isAuthenticated && user && user.role === 'STUDENT' && courseId) {
@@ -112,6 +143,16 @@ const CourseDetailsPage: React.FC = () => {
     }
   };
 
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!courseId || reviewRating === 0) {
+      setReviewError(t('reviews.ratingRequired', 'امتیاز دادن الزامی است.'));
+      return;
+    }
+    setReviewError(null);
+    submitReview({ variables: { courseId, rating: reviewRating, comment: reviewComment } });
+  };
+
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
@@ -123,6 +164,12 @@ const CourseDetailsPage: React.FC = () => {
   if (!courseData || !courseData.getCourseById) return <p>{t('courseDetails.notFound', 'دوره مورد نظر یافت نشد.')}</p>;
 
   const course = courseData.getCourseById;
+  const reviews = reviewsData?.getReviewsForCourse || [];
+  const averageRating = reviews.length > 0 ? reviews.reduce((acc, review) => acc + review.rating, 0) / reviews.length : 0;
+
+  // Check if current user has already submitted a review for this course
+  const currentUserReview = reviews.find(review => review.user.id === user?.id);
+
 
   // Basic styling (can be moved to CSS files or styled-components)
 // import Typography from '@mui/material/Typography';
@@ -245,10 +292,79 @@ const CourseDetailsPage: React.FC = () => {
       </div>
       {/* MUI: </Box> */}
 
+      {/* MUI: </Box> */}
+
+      {/* Reviews Section */}
       {/* MUI: <Box sx={{ my: 4 }}> <Typography variant="h5" gutterBottom>{t('courseDetails.reviewsTitle', 'نظرات دانشجویان')}</Typography> ... </Box> */}
-      <div style={{marginTop: '30px'}}>
+      <div style={{marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #eee'}}>
         <h3>{t('courseDetails.reviewsTitle', 'نظرات دانشجویان')}</h3>
-        <p>{t('courseDetails.noReviews', 'هنوز نظری برای این دوره ثبت نشده است.')}</p>
+        {/* MUI: <Typography variant="h6"> {t('reviews.averageRating', 'میانگین امتیاز')}: {averageRating > 0 ? averageRating.toFixed(1) + '/5' : t('reviews.noRatingsYet', 'هنوز امتیازی ثبت نشده')} ({reviews.length} {t('reviews.ratingsCount', 'نظر')}) </Typography> */}
+        <p><strong>{t('reviews.averageRating', 'میانگین امتیاز')}:</strong> {averageRating > 0 ? `${averageRating.toFixed(1)}/5 (${reviews.length} ${t('reviews.ratingsCountSingle', 'نظر')}${reviews.length !== 1 ? t('reviews.ratingsCountPluralSuffix', 'ات') : ''})` : t('reviews.noRatingsYet', 'هنوز امتیازی ثبت نشده')}</p>
+
+
+        {/* Review Form Button/Display */}
+        {isAuthenticated && user?.role === 'STUDENT' && isUserEnrolled && !currentUserReview && !showReviewForm && (
+            // MUI: <Button variant="outlined" sx={{my:2}} onClick={() => setShowReviewForm(true)}>{t('reviews.writeReviewButton', 'نوشتن نظر')}</Button>
+            <button onClick={() => setShowReviewForm(true)} style={{margin: '15px 0', padding: '10px', cursor: 'pointer'}}>{t('reviews.writeReviewButton', 'نوشتن نظر')}</button>
+        )}
+        {isAuthenticated && user?.role === 'STUDENT' && isUserEnrolled && currentUserReview && (
+             // MUI: <Alert severity="info" sx={{my:2}}>{t('reviews.alreadyReviewed', 'شما قبلا برای این دوره نظر داده اید.')}</Alert>
+            <p style={{color: 'green', margin: '15px 0', padding: '10px', background: '#e6ffed', border: '1px solid #b2dfc8', borderRadius: '4px'}}>{t('reviews.alreadyReviewed', 'شما قبلا برای این دوره نظر داده اید.')}</p>
+        )}
+
+        {showReviewForm && (
+          // MUI: <Paper component="form" onSubmit={handleReviewSubmit} sx={{p:2, my:2, border: '1px solid #ccc'}}> <Typography variant="h6">{t('reviews.yourReviewTitle', 'نظر شما')}</Typography> <Box sx={{display: 'flex', alignItems: 'center', my:1}}> <Typography component="legend">{t('reviews.ratingLabel', 'امتیاز شما')}:</Typography> <Rating name="rating" value={reviewRating} onChange={(event, newValue) => {setReviewRating(newValue || 0);}} /> </Box> <TextField fullWidth multiline rows={3} label={t('reviews.commentLabel', 'نظر شما')} value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} margin="normal" /> {reviewError && <Alert severity="error">{reviewError}</Alert>} <Box sx={{mt:1}}> <Button type="submit" variant="contained" disabled={reviewSubmitting}>{reviewSubmitting ? t('submitting', 'در حال ارسال...') : t('reviews.submitButton', 'ارسال نظر')}</Button> <Button onClick={() => setShowReviewForm(false)} sx={{ml:1}}>{t('cancel', 'انصراف')}</Button> </Box> </Paper>
+          <form onSubmit={handleReviewSubmit} style={{padding: '15px', border: '1px solid #ccc', margin: '15px 0', borderRadius: '5px', background: '#f9f9f9'}}>
+            <h4>{t('reviews.yourReviewTitle', 'نظر شما')}</h4>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ marginRight: '10px' }}>{t('reviews.ratingLabel', 'امتیاز شما (از 1 تا 5)')}: </label>
+              {[1, 2, 3, 4, 5].map(star => (
+                <button type="button" key={star} onClick={() => setReviewRating(star)} style={{ background: reviewRating >= star ? 'gold' : 'lightgrey', color: reviewRating >= star ? 'black' : 'black', border: '1px solid #ccc', margin: '0 2px', cursor: 'pointer', padding: '5px 10px', fontSize: '1.2em', borderRadius: '3px' }}>
+                  {/* Using text star for simplicity, MUI Rating component is better */}
+                  ★
+                </button>
+              ))}
+            </div>
+            <div style={{marginTop: '10px'}}>
+              <label htmlFor="reviewComment">{t('reviews.commentLabel', 'نظر شما (اختیاری)')}:</label>
+              <textarea id="reviewComment" value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} style={{width: 'calc(100% - 16px)', minHeight: '80px', padding: '8px', border: '1px solid #ccc', borderRadius: '3px', display: 'block', marginTop: '5px'}}></textarea>
+            </div>
+            {reviewError && <p style={{color: 'red', marginTop: '5px'}}>{reviewError}</p>}
+            <div style={{marginTop: '15px'}}>
+                <button type="submit" disabled={reviewSubmitting} style={{padding: '10px 18px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}>
+                {reviewSubmitting ? t('submitting', 'در حال ارسال...') : t('reviews.submitButton', 'ارسال نظر')}
+                </button>
+                <button type="button" onClick={() => { setShowReviewForm(false); setReviewError(null); }} style={{marginLeft: '10px', padding: '10px 18px', cursor: 'pointer'}}>{t('cancel', 'انصراف')}</button>
+            </div>
+          </form>
+        )}
+
+        {reviewsLoading && <p>{t('reviews.loading', 'در حال بارگذاری نظرات...')}</p>}
+        {reviewsError && <p style={{color: 'red'}}>{t('reviews.errorLoading', 'خطا در بارگذاری نظرات: ')} {reviewsError.message}</p>}
+
+        {reviews.length === 0 && !reviewsLoading && !currentUserReview && (
+            <p>{t('courseDetails.noReviews', 'هنوز نظری برای این دوره ثبت نشده است.')}</p>
+        )}
+
+        {/* MUI: <List sx={{ width: '100%', bgcolor: 'background.paper' }}> */}
+        {reviews.map(review => (
+          // MUI: <ListItem key={review.id} alignItems="flex-start" sx={{borderBottom: '1px solid #eee', py:2}}> <ListItemAvatar><Avatar>{review.user.profile?.firstName?.[0] || review.user.email[0]}</Avatar></ListItemAvatar> <ListItemText primary={<><Typography component="span" sx={{fontWeight: 'bold'}}>{review.user.profile?.firstName || review.user.email}</Typography> <Rating value={review.rating} readOnly size="small" sx={{verticalAlign: 'middle', ml:1}} /></>} secondary={<><Typography variant="caption" display="block" color="text.secondary">{new Date(review.createdAt).toLocaleDateString('fa-IR')}</Typography>{review.comment || ''}</>} /> </ListItem>
+          <div key={review.id} style={{borderBottom: '1px solid #eee', padding: '15px 0'}}>
+            <div style={{display: 'flex', alignItems: 'center', marginBottom: '5px'}}>
+                {/* Basic Avatar placeholder */}
+                <div style={{width: '30px', height: '30px', borderRadius: '50%', background: '#007bff', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '10px', fontWeight: 'bold'}}>
+                    {review.user.profile?.firstName?.[0]?.toUpperCase() || review.user.email[0]?.toUpperCase()}
+                </div>
+                <strong>{review.user.profile?.firstName || review.user.email}</strong>
+                <span style={{marginLeft: '10px', color: 'orange'}}>
+                    {Array(review.rating).fill('★').join('')}{Array(5 - review.rating).fill('☆').join('')}
+                </span>
+            </div>
+            <p style={{margin: '5px 0 5px 40px', whiteSpace: 'pre-wrap'}}>{review.comment}</p>
+            <small style={{marginLeft: '40px', color: 'gray'}}>{new Date(review.createdAt).toLocaleDateString('fa-IR')}</small>
+          </div>
+        ))}
+        {/* MUI: </List> */}
       </div>
       {/* MUI: </Container> */}
     </div>

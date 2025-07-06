@@ -15,6 +15,38 @@ export const GET_ME_WITH_COURSES = gql`
   }
 `;
 
+export const GET_QUESTIONS_FOR_LESSON = gql`
+  query GetQuestionsForLesson($lessonId: ID!) {
+    getQuestionsForLesson(lessonId: $lessonId) {
+      id
+      title
+      content
+      createdAt
+      user { # User who asked
+        id
+        email
+        profile {
+          firstName
+          lastName
+        }
+      }
+      answers {
+        id
+        content
+        createdAt
+        user { # User who answered
+          id
+          email
+          profile {
+            firstName
+            lastName
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const GET_CATEGORY_BY_SLUG = gql`
   query GetCategoryBySlug($slug: String!) {
     getCategoryBySlug(slug: $slug) {
@@ -75,6 +107,39 @@ export const GET_ALL_COURSES_FOR_ADMIN_VIEW = gql`
     }
   }
 `;
+
+export const GET_REVIEWS_FOR_COURSE = gql`
+  query GetReviewsForCourse($courseId: ID!) {
+    # Assuming the backend resolver for Course.reviews or a dedicated getReviewsForCourse query exists
+    # If it's on Course type:
+    # getCourseById(id: $courseId) {
+    #   id
+    #   reviews {
+    #     id
+    #     rating
+    #     comment
+    #     createdAt
+    #     user { id email profile { firstName lastName } }
+    #   }
+    # }
+    # If it's a top-level query (as implemented in backend step):
+    getReviewsForCourse(courseId: $courseId) {
+      id
+      rating
+      comment
+      createdAt
+      user {
+        id
+        email
+        profile {
+          firstName
+          lastName
+        }
+      }
+    }
+  }
+`;
+
 
 export const GET_ALL_USERS_FOR_ADMIN = gql`
   query GetAllUsersForAdmin {

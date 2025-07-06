@@ -575,10 +575,43 @@ export const resolvers = {
         orderBy: { createdAt: 'desc' },
       });
     },
+    getQuestionsForLesson: async (_parent: any, { lessonId }: { lessonId: string }, context: Context) => {
+      // Check if lesson exists (optional, but good practice)
+      const lesson = await context.prisma.lesson.findUnique({ where: { id: lessonId } });
+      if (!lesson) {
+        throw new UserInputError('Lesson not found.');
+      }
+      // TODO: Add authorization: User must be enrolled in the course to see questions,
+      // or the lesson must be previewable. For now, fetching all.
+      return context.prisma.question.findMany({
+        where: { lessonId },
+        include: {
+          user: { include: { profile: true } }, // User who asked
+          answers: { // Answers for each question
+            include: {
+              user: { include: { profile: true } } // User who answered
+            },
+            orderBy: { createdAt: 'asc' }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    },
+    getReviewsForCourse: async (_parent: any, { courseId }: { courseId: string }, context: Context) => {
+      return context.prisma.review.findMany({
+        where: { courseId },
+        include: {
+          user: { include: { profile: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    },
   },
 
   Mutation: { // Extend Mutation block
     ...resolvers.Mutation, // Keep existing mutations
+
+    // Admin mutations (already present)
     updateUserRole: async (_parent: any, { userId, newRole }: { userId: string, newRole: UserRole }, context: Context) => {
       if (!context.user || context.user.role !== UserRole.ADMIN) {
         throw new ForbiddenError('Access denied. Admin role required to change user roles.');
@@ -610,6 +643,130 @@ export const resolvers = {
         include: { instructor: { include: { profile: true } }, category: true },
       });
     },
+
+    // --- Q&A Mutations ---
+    askQuestion: async (_parent: any, { input }: { input: { lessonId: string, title?: string, content: string } }, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('You must be logged in to ask a question.');
+      }
+      const { lessonId, title, content } = input;
+      if (!content.trim()) {
+        throw new UserInputError('Question content cannot be empty.');
+      }
+
+      // Check if lesson exists
+      const lesson = await context.prisma.lesson.findUnique({
+        where: { id: lessonId },
+        include: { section: { include: { course: true } } }
+      });
+      if (!lesson) {
+        throw new UserInputError('Lesson not found.');
+      }
+
+      // Authorization: Check if user is enrolled in the course OR if the lesson is previewable
+      // (or if user is instructor/admin - they can ask too for seeding/testing)
+      let isEnrolled = false;
+      if (context.user.role === UserRole.STUDENT) {
+        const enrollment = await context.prisma.enrollment.findUnique({
+          where: { userId_courseId: { userId: context.user.id, courseId: lesson.section.courseId } }
+        });
+        isEnrolled = !!enrollment;
+      } else if (context.user.role === UserRole.INSTRUCTOR || context.user.role === UserRole.ADMIN) {
+        isEnrolled = true; // Instructors/Admins can always ask
+      }
+
+      if (!isEnrolled && !lesson.isPreviewable) {
+         throw new ForbiddenError('You must be enrolled in this course to ask questions about this lesson.');
+      }
+
+      return context.prisma.question.create({
+        data: {
+          lessonId,
+          title,
+          content,
+          userId: context.user.id,
+        },
+        include: { user: { include: { profile: true } }, answers: true, lesson: true }
+      });
+    },
+
+    postAnswer: async (_parent: any, { input }: { input: { questionId: string, content: string } }, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('You must be logged in to post an answer.');
+      }
+      const { questionId, content } = input;
+      if (!content.trim()) {
+        throw new UserInputError('Answer content cannot be empty.');
+      }
+
+      const question = await context.prisma.question.findUnique({
+        where: { id: questionId },
+        include: { lesson: { include: { section: { include: { course: true } } } } }
+      });
+
+      if (!question) {
+        throw new UserInputError('Question not found.');
+      }
+
+      // Authorization: Only the course instructor or an admin can answer
+      const courseInstructorId = question.lesson.section.course.instructorId;
+      if (context.user.id !== courseInstructorId && context.user.role !== UserRole.ADMIN) {
+        throw new ForbiddenError('Only the course instructor or an admin can answer questions.');
+      }
+
+      return context.prisma.answer.create({
+        data: {
+          questionId,
+          content,
+          userId: context.user.id,
+        },
+        include: { user: { include: { profile: true } }, question: true }
+      });
+    },
+
+    // --- Review Mutation ---
+    submitReview: async (_parent: any, { courseId, rating, comment }: { courseId: string, rating: number, comment?: string }, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('You must be logged in to submit a review.');
+      }
+       if (context.user.role !== UserRole.STUDENT) {
+         throw new ForbiddenError('Only students can submit reviews.');
+      }
+
+      if (rating < 1 || rating > 5) {
+        throw new UserInputError('Rating must be between 1 and 5.');
+      }
+
+      // Check if user is enrolled in the course
+      const enrollment = await context.prisma.enrollment.findUnique({
+        where: { userId_courseId: { userId: context.user.id, courseId } }
+      });
+      if (!enrollment) {
+        throw new ForbiddenError('You must be enrolled in this course to submit a review.');
+      }
+      // Optional: Add check for course completion or progress before allowing review
+      // if (!enrollment.completedAt && (enrollment.progress || 0) < SOME_THRESHOLD) {
+      //   throw new ForbiddenError('Please complete more of the course before submitting a review.');
+      // }
+
+      // Check if user has already reviewed this course (Prisma schema @@unique should also prevent this)
+      const existingReview = await context.prisma.review.findUnique({
+        where: { userId_courseId: { userId: context.user.id, courseId } }
+      });
+      if (existingReview) {
+        throw new UserInputError('You have already reviewed this course.');
+      }
+
+      return context.prisma.review.create({
+        data: {
+          userId: context.user.id,
+          courseId,
+          rating,
+          comment,
+        },
+        include: { user: { include: { profile: true } }, course: true }
+      });
+    }
   },
 
   // --- Relational Resolvers (Type Resolvers) ---
@@ -684,6 +841,31 @@ export const resolvers = {
     },
     course: async (parent: { courseId: string }, _args: any, context: Context) => {
       return context.prisma.course.findUnique({ where: { id: parent.courseId } });
+    }
+  },
+
+  Question: {
+    user: async (parent: { userId: string }, _args: any, context: Context) => {
+      return context.prisma.user.findUnique({ where: { id: parent.userId }, include: { profile: true } });
+    },
+    lesson: async (parent: { lessonId: string }, _args: any, context: Context) => {
+      return context.prisma.lesson.findUnique({ where: { id: parent.lessonId } });
+    },
+    answers: async (parent: { id: string }, _args: any, context: Context) => {
+      return context.prisma.answer.findMany({
+        where: { questionId: parent.id },
+        include: { user: { include: { profile: true } } },
+        orderBy: { createdAt: 'asc' }
+      });
+    }
+  },
+
+  Answer: {
+    user: async (parent: { userId: string }, _args: any, context: Context) => {
+      return context.prisma.user.findUnique({ where: { id: parent.userId }, include: { profile: true } });
+    },
+    question: async (parent: { questionId: string }, _args: any, context: Context) => {
+      return context.prisma.question.findUnique({ where: { id: parent.questionId } });
     }
   }
 };
