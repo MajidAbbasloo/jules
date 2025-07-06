@@ -15,6 +15,40 @@ export const GET_ME_WITH_COURSES = gql`
   }
 `;
 
+export const IS_ENROLLED_QUERY = gql`
+  query IsEnrolled($courseId: ID!) {
+    isEnrolled(courseId: $courseId)
+  }
+`;
+
+export const GET_MY_ENROLLED_COURSES = gql`
+  query GetMyEnrolledCourses {
+    getMyEnrolledCourses {
+      id # Enrollment ID
+      enrolledAt
+      progress
+      course {
+        id
+        title
+        thumbnailUrl
+        description
+        instructor {
+          id
+          profile {
+            firstName
+            lastName
+          }
+        }
+        category {
+          id
+          name
+        }
+        # _count { sections lessons } // If needed for display
+      }
+    }
+  }
+`;
+
 export const GET_INSTRUCTOR_COURSES = gql`
   query GetInstructorCourses($instructorId: ID!) {
     # This query doesn't exist yet on backend.

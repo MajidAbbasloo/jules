@@ -19,6 +19,24 @@ export const LOGIN_MUTATION = gql`
   }
 `;
 
+// --- Enrollment Mutations ---
+export const ENROLL_IN_COURSE_MUTATION = gql`
+  mutation EnrollInCourse($courseId: ID!) {
+    enrollInCourse(courseId: $courseId) {
+      id # Enrollment ID
+      enrolledAt
+      course {
+        id
+        title
+      }
+      user {
+        id
+        email
+      }
+    }
+  }
+`;
+
 export const REGISTER_MUTATION = gql`
   mutation Register($email: String!, $password: String!, $firstName: String, $lastName: String, $role: UserRole) {
     register(input: { email: $email, password: $password, firstName: $firstName, lastName: $lastName, role: $role }) {

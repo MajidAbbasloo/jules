@@ -377,8 +377,98 @@ export const resolvers = {
         // depending on DB constraints or if you add checks here.
         // Consider setting categoryId on courses to null instead, or preventing deletion if courses exist.
         return context.prisma.category.delete({ where: { id } });
+    },
+
+    // --- Enrollment Mutation ---
+    enrollInCourse: async (_parent: any, { courseId }: { courseId: string }, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('Not authenticated. Please log in to enroll.');
+      }
+      if (context.user.role !== UserRole.STUDENT) {
+        // For now, only students can enroll. Instructors/Admins have implicit access.
+        // This could be changed if instructors should also "enroll" for tracking.
+        throw new ForbiddenError('Only students can enroll in courses.');
+      }
+
+      const courseToEnroll = await context.prisma.course.findUnique({
+        where: { id: courseId },
+      });
+
+      if (!courseToEnroll) {
+        throw new UserInputError('Course not found.');
+      }
+      if (!courseToEnroll.isPublished) {
+        throw new ForbiddenError('This course is not currently published and open for enrollment.');
+      }
+
+      const existingEnrollment = await context.prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId: context.user.id,
+            courseId: courseId,
+          },
+        },
+      });
+
+      if (existingEnrollment) {
+        throw new UserInputError('You are already enrolled in this course.');
+      }
+
+      return context.prisma.enrollment.create({
+        data: {
+          userId: context.user.id,
+          courseId: courseId,
+          progress: 0, // Initial progress
+        },
+        include: {
+          user: { include: { profile: true } },
+          course: true,
+        },
+      });
     }
   },
+
+  Query: { // Extend Query block for new queries
+    ...resolvers.Query, // Keep existing queries
+    getMyEnrolledCourses: async (_parent: any, _args: any, context: Context) => {
+      if (!context.user) {
+        throw new AuthenticationError('Not authenticated.');
+      }
+      // Typically for students, but an admin/instructor might want to see their test enrollments too.
+      // Add role check if strictly for students:
+      // if (context.user.role !== UserRole.STUDENT) {
+      //   return []; // Or throw ForbiddenError
+      // }
+      return context.prisma.enrollment.findMany({
+        where: { userId: context.user.id },
+        include: {
+          course: { // Include details of the enrolled course
+            include: {
+              instructor: { include: { profile: true } },
+              category: true,
+              _count: { select: { sections: true, lessons: true } } // Example counts
+            }
+          }
+        },
+        orderBy: { enrolledAt: 'desc' }
+      });
+    },
+    isEnrolled: async (_parent: any, { courseId }: { courseId: string }, context: Context): Promise<boolean> => {
+        if (!context.user) {
+            return false; // Not authenticated, so not enrolled
+        }
+        const enrollment = await context.prisma.enrollment.findUnique({
+            where: {
+                userId_courseId: {
+                    userId: context.user.id,
+                    courseId: courseId,
+                },
+            },
+        });
+        return !!enrollment;
+    },
+  },
+
 
   // --- Relational Resolvers (Type Resolvers) ---
   // These resolve fields on types if they are not directly available or need custom logic.

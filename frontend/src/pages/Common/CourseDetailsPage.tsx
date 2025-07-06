@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@apollo/client';
-import { GET_COURSE_DETAILS_FOR_EDIT as GET_COURSE_DETAILS } from '../../graphql/queries'; // Using the same query for now
+import { useQuery, useMutation } from '@apollo/client';
+import { GET_COURSE_DETAILS_FOR_EDIT as GET_COURSE_DETAILS, IS_ENROLLED_QUERY } from '../../graphql/queries';
+import { ENROLL_IN_COURSE_MUTATION } from '../../graphql/mutations';
+import { useAuth } from '../../context/AuthContext';
 
 interface Lesson {
   id: string;
@@ -50,22 +52,77 @@ interface Course {
 const CourseDetailsPage: React.FC = () => {
   const { t } = useTranslation();
   const { courseId } = useParams<{ courseId: string }>();
+  const navigate = useNavigate();
+  const location = useLocation(); // Get location object
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [isUserEnrolled, setIsUserEnrolled] = useState<boolean | null>(null);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
 
-  const { loading, error, data } = useQuery<{ getCourseById: Course }>(GET_COURSE_DETAILS, {
+  // Query for course details
+  const { loading: courseLoading, error: courseError, data: courseData } = useQuery<{ getCourseById: Course }>(GET_COURSE_DETAILS, {
     variables: { id: courseId },
     skip: !courseId,
   });
+
+  // Query to check if user is enrolled
+  const { loading: isEnrolledLoading, data: isEnrolledData, refetch: refetchIsEnrolled } = useQuery(IS_ENROLLED_QUERY, {
+    variables: { courseId },
+    skip: !isAuthenticated || !courseId || !user || user.role !== 'STUDENT', // Skip if not student or not logged in
+    onCompleted: (data) => {
+      setIsUserEnrolled(data.isEnrolled);
+    },
+    onError: (err) => {
+      console.error("Error checking enrollment status:", err);
+      // setIsUserEnrolled(false); // Or handle error appropriately
+    }
+  });
+
+  // Mutation for enrolling in the course
+  const [enrollInCourse, { loading: enrollLoading }] = useMutation(ENROLL_IN_COURSE_MUTATION, {
+    onCompleted: () => {
+      setIsUserEnrolled(true);
+      setEnrollmentError(null);
+      alert(t('courseDetails.enrollSuccess', 'شما با موفقیت در دوره ثبت نام شدید!'));
+      refetchIsEnrolled(); // Re-check enrollment status
+      // Optionally, refetch enrolled courses list if it's cached and displayed elsewhere immediately
+    },
+    onError: (error) => {
+      setEnrollmentError(error.message || t('courseDetails.enrollError', 'خطا در ثبت نام. لطفاً دوباره تلاش کنید.'));
+    }
+  });
+
+  useEffect(() => {
+    // If user logs out/in, or courseId changes, refetch enrollment status
+    if (isAuthenticated && user && user.role === 'STUDENT' && courseId) {
+      refetchIsEnrolled();
+    } else if (!isAuthenticated) {
+      setIsUserEnrolled(null); // Reset on logout
+    }
+  }, [isAuthenticated, user, courseId, refetchIsEnrolled]);
+
+
+  const handleEnroll = async () => {
+    if (!courseId) return;
+    setEnrollmentError(null);
+    try {
+      await enrollInCourse({ variables: { courseId } });
+    } catch (e) {
+      // Error handled by onError in useMutation
+    }
+  };
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
 
-  if (loading) return <p>{t('loading', 'در حال بارگذاری...')}</p>;
-  if (error) return <p>{t('errorLoading', 'خطا در بارگذاری جزئیات دوره: ')} {error.message}</p>;
-  if (!data || !data.getCourseById) return <p>{t('courseDetails.notFound', 'دوره مورد نظر یافت نشد.')}</p>;
+  if (courseLoading || authLoading || (isAuthenticated && user?.role === 'STUDENT' && isEnrolledLoading && isUserEnrolled === null)) {
+    return <p>{t('loading', 'در حال بارگذاری...')}</p>;
+  }
+  if (courseError) return <p>{t('errorLoading', 'خطا در بارگذاری جزئیات دوره: ')} {courseError.message}</p>;
+  if (!courseData || !courseData.getCourseById) return <p>{t('courseDetails.notFound', 'دوره مورد نظر یافت نشد.')}</p>;
 
-  const course = data.getCourseById;
+  const course = courseData.getCourseById;
 
   // Basic styling (can be moved to CSS files or styled-components)
 // import Typography from '@mui/material/Typography';
@@ -115,10 +172,31 @@ const CourseDetailsPage: React.FC = () => {
       </header>
       {/* MUI: </Box> */}
 
-      {/* MUI: <Button variant="contained" color="primary" size="large" sx={{ my: 2 }}>{t('courseDetails.enrollButton', 'ثبت نام در دوره')}</Button> */}
-      <button style={{padding: '10px 20px', fontSize: '1.1em', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
-        {t('courseDetails.enrollButton', 'ثبت نام در دوره')}
-      </button>
+      {/* Enrollment Button Logic */}
+      {/* MUI: <Box sx={{ my: 2, display: 'flex', justifyContent: 'center' }}> */}
+      <div style={{ margin: '20px 0', textAlign: 'center' }}>
+        {isAuthenticated && user?.role === 'STUDENT' && isUserEnrolled === false && (
+          // MUI: <Button variant="contained" color="primary" size="large" onClick={handleEnroll} disabled={enrollLoading || isEnrolledLoading}> {enrollLoading ? <CircularProgress size={24} /> : t('courseDetails.enrollButton', 'ثبت نام در دوره')} </Button>
+          <button onClick={handleEnroll} disabled={enrollLoading || isEnrolledLoading} style={{padding: '10px 20px', fontSize: '1.1em', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
+            {enrollLoading ? t('enrolling', 'در حال ثبت نام...') : t('courseDetails.enrollButton', 'ثبت نام در دوره')}
+          </button>
+        )}
+        {isAuthenticated && user?.role === 'STUDENT' && isUserEnrolled === true && (
+          // MUI: <Button variant="contained" color="success" size="large" component={Link} to={`/learn/course/${course.id}`}>{t('courseDetails.viewCourseButton', 'مشاهده دوره')}</Button>
+          <Link to={`/learn/course/${course.id}`} style={{padding: '10px 20px', fontSize: '1.1em', backgroundColor: '#17a2b8', color: 'white', textDecoration: 'none', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
+            {t('courseDetails.viewCourseButton', 'مشاهده دوره')}
+          </Link>
+        )}
+        {!isAuthenticated && course.isPublished && ( // Only show login to enroll if course is published
+           // MUI: <Button variant="outlined" color="primary" size="large" onClick={() => navigate('/login', { state: { from: location } })}>{t('courseDetails.loginToEnrollButton', 'برای ثبت نام وارد شوید')}</Button>
+          <button onClick={() => navigate('/login', { state: { from: { pathname: location.pathname } } })} style={{padding: '10px 20px', fontSize: '1.1em', backgroundColor: 'grey', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
+            {t('courseDetails.loginToEnrollButton', 'برای ثبت نام وارد شوید')}
+          </button>
+        )}
+        {enrollmentError && <p style={{ color: 'red', marginTop: '10px' }}>{enrollmentError}</p>}
+         {/* MUI: {enrollmentError && <Alert severity="error" sx={{ mt: 1 }}>{enrollmentError}</Alert>} */}
+      </div>
+      {/* MUI: </Box> */}
 
       {/* MUI: <Box sx={{ my: 3 }}> <img ... style={{ width: '100%', borderRadius: '8px', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }} /> </Box> */}
       {course.thumbnailUrl && (

@@ -132,5 +132,21 @@
   "manageContent.confirmDeleteSection": "آیا از حذف این سرفصل و تمام درسهای آن مطمئن هستید؟",
   "manageContent.sectionDeleteError": "خطا در حذف سرفصل: ",
   "manageContent.confirmDeleteLesson": "آیا از حذف این درس مطمئن هستید؟",
-  "manageContent.lessonDeleteError": "خطا در حذف درس: "
+  "manageContent.lessonDeleteError": "خطا در حذف درس: ",
+  "enrolling": "در حال ثبت نام...",
+  "courseDetails.enrollSuccess": "شما با موفقیت در دوره ثبت نام شدید!",
+  "courseDetails.enrollError": "خطا در ثبت نام. لطفاً دوباره تلاش کنید.",
+  "courseDetails.viewCourseButton": "مشاهده دوره",
+  "courseDetails.loginToEnrollButton": "برای ثبت نام وارد شوید",
+  "studentDashboard.errorLoadingCourses": "خطا در بارگذاری دوره های ثبت نام شده: ",
+  "studentDashboard.myCoursesTitle": "دوره های من",
+  "studentDashboard.noCoursesEnrolled": "شما هنوز در هیچ دوره ای ثبت نام نکرده اید.",
+  "studentDashboard.startLearning": "شروع یادگیری",
+  "progress": "پیشرفت",
+  "learningPage.notEnrolled": "شما در این دوره ثبت نام نکرده اید یا دسترسی ندارید.",
+  "learningPage.enrollmentCheckError": "خطا در بررسی وضعیت ثبت نام: ",
+  "learningPage.accessDenied": "دسترسی به این محتوا امکان پذیر نمی باشد.",
+  "learningPage.enrollToViewLesson": "برای مشاهده این درس، ابتدا در دوره ثبت نام کنید.",
+  "learningPage.noContent": "محتوایی برای این درس وجود ندارد.",
+  "learningPage.selectLesson": "لطفا یک درس را برای مشاهده انتخاب کنید."
 }

@@ -220,8 +220,16 @@ export const typeDefs = gql`
     updateCategory(id: ID!, name: String, slug: String, description: String): Category!
     deleteCategory(id: ID!): Category
 
-    # TODO: Enrollment, Review mutations
-    # enrollInCourse(courseId: ID!): Enrollment!
+    # Enrollment
+    enrollInCourse(courseId: ID!): Enrollment!
+
+    # TODO: Review mutations
     # leaveReview(courseId: ID!, rating: Int!, comment: String): Review!
+  }
+
+  extend type Query {
+    # Get courses a student is enrolled in
+    getMyEnrolledCourses: [Enrollment!]
+    isEnrolled(courseId: ID!): Boolean!
   }
 `;
